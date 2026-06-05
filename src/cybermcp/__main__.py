@@ -16,6 +16,59 @@ def _requires_http_auth(transport: str, host: str, allow_localhost: bool) -> boo
 
 def main() -> None:
     cfg = get_config()
+    
+    import sys as py_sys
+    if len(py_sys.argv) > 1 and py_sys.argv[1].lower() == "doctor":
+        import asyncio
+        from cybermcp.tools.health import diagnostics
+        from rich.console import Console
+        from rich.table import Table
+
+        console = Console()
+        console.print("[bold blue]Vajra MCP Diagnostics Tool (Doctor)[/bold blue]\n")
+        console.print("Running health checks for priority security tools...\n")
+
+        results = asyncio.run(diagnostics())
+
+        table = Table(title="Vajra MCP Tool Health Diagnostics")
+        table.add_column("Tool", style="cyan")
+        table.add_column("Installed", style="bold")
+        table.add_column("Version", style="green")
+        table.add_column("Path", style="yellow")
+        table.add_column("API Keys Configured", style="magenta")
+
+        for r in results:
+            inst = "[green]YES[/green]" if r["installed"] else "[red]NO[/red]"
+            keys_str = "N/A"
+            if r["api_keys"]:
+                keys_str = ", ".join(f"{k}: {'[green]OK[/green]' if v else '[red]MISSING[/red]'}" for k, v in r["api_keys"].items())
+            
+            table.add_row(
+                r["tool"],
+                inst,
+                r["version"],
+                r["path"] if r["path"] else "-",
+                keys_str
+            )
+
+        console.print(table)
+
+        missing = [r for r in results if not r["installed"]]
+        if missing:
+            console.print("\n[bold yellow]Suggested Installation Fixes for Missing Tools:[/bold yellow]")
+            for m in missing:
+                console.print(f"• [bold cyan]{m['tool']}[/bold cyan]: {m['install_command']}")
+        else:
+            console.print("\n[bold green]All priority tools are installed and ready to use![/bold green]")
+        
+        py_ver = f"{py_sys.version_info.major}.{py_sys.version_info.minor}.{py_sys.version_info.micro}"
+        console.print(f"\n[bold blue]System Information:[/bold blue]")
+        console.print(f"• Python version: {py_ver}")
+        console.print(f"• Database Path: {cfg.db_path}")
+        console.print(f"• Sessions Directory: {cfg.sessions_dir}")
+        console.print(f"• Reports Directory: {cfg.reports_dir}")
+        return
+
     parser = argparse.ArgumentParser(
         prog="vajra-mcp",
         description="Vajra MCP - MCP execution backend for Claude Code security workflows",

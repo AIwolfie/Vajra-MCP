@@ -208,6 +208,16 @@ def _tool_result_payload(result: ToolResult) -> dict[str, Any]:
     }
 
 
+def _get_artifact_extension(tool_name: str) -> str:
+    if tool_name == "nmap":
+        return "xml"
+    if tool_name in ("nuclei", "katana", "feroxbuster", "dalfox"):
+        return "jsonl"
+    if tool_name in ("httpx", "ffuf", "wpscan", "testssl", "whatweb"):
+        return "json"
+    return "txt"
+
+
 async def _execute_tool(
     tool_name: str,
     args: dict[str, Any] | None,
@@ -275,6 +285,46 @@ async def _execute_tool(
         ScanStatus.COMPLETED if result.success else ScanStatus.FAILED,
     )
 
+    # Save artifact and execution logs on disk
+    import aiofiles
+    from pathlib import Path
+    cfg = _get_config()
+    session_dir = Path(cfg.sessions_dir) / session.id
+    
+    # Save raw stdout artifact
+    ext = _get_artifact_extension(normalized_tool_name)
+    raw_path = session_dir / "artifacts" / f"{normalized_tool_name}_{scan.id}_raw.{ext}"
+    raw_file_str = ""
+    try:
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(raw_path, "w", encoding="utf-8") as f:
+            await f.write(result.raw_output)
+        raw_file_str = str(raw_path.resolve())
+    except Exception as e:
+        logger.error("Failed to write raw artifact for %s: %s", scan.id, e)
+
+    # Save log file
+    log_path = session_dir / "scans" / f"{normalized_tool_name}_{scan.id}.log"
+    log_content = (
+        f"Command: {result.command}\n"
+        f"Started At: {result.started_at}\n"
+        f"Completed At: {result.completed_at}\n"
+        f"Return Code: {result.return_code}\n"
+        f"Execution Time: {result.execution_time:.2f}s\n\n"
+        f"--- STDOUT ---\n{result.raw_output}\n\n"
+        f"--- STDERR ---\n{result.error}\n"
+    )
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(log_path, "w", encoding="utf-8") as f:
+            await f.write(log_content)
+    except Exception as e:
+        logger.error("Failed to write scan log for %s: %s", scan.id, e)
+
+    # Update parsed_data with the raw artifact path
+    if isinstance(result.parsed_data, dict):
+        result.parsed_data["raw_file"] = raw_file_str
+
     return {
         "status": "success" if result.success else "error",
         "session_id": session.id,
@@ -293,6 +343,10 @@ async def _execute_tool(
 
 
 async def _build_report(session_id: str) -> tuple[Report, ReportSummary]:
+    import re
+    from pathlib import Path
+    from cybermcp.reporting.models import TimelineEntry
+
     db = _get_db()
     session = await db.get_session(session_id)
     if session is None:
@@ -313,12 +367,159 @@ async def _build_report(session_id: str) -> tuple[Report, ReportSummary]:
         for f in findings
     ]
     cards = CardGenerator.findings_to_cards(report_findings)
+    for card in cards:
+        # Re-attach tool_name from database finding if available
+        for f in findings:
+            if f.title == card.title and f.affected_asset == card.affected_asset:
+                card.tool_name = f.scan_id.split("-")[0] if "-" in f.scan_id else ""
+                break
+
     summary = ReportSummary.from_cards(cards)
+
+    scans = await db.get_scans(session_id)
+
+    # 1. Scan history
+    scan_history = []
+    for s in scans:
+        runs = await db.get_tool_runs(s.id)
+        cmd = runs[0].command if runs else ""
+        exec_time = runs[0].execution_time if runs else 0.0
+        ret_code = runs[0].return_code if runs else -1
+        
+        cfg = _get_config()
+        ext = _get_artifact_extension(s.tool_name)
+        raw_file = str(Path(cfg.sessions_dir) / session_id / "artifacts" / f"{s.tool_name}_{s.id}_raw.{ext}")
+        log_file = str(Path(cfg.sessions_dir) / session_id / "scans" / f"{s.tool_name}_{s.id}.log")
+        
+        scan_history.append({
+            "tool_name": s.tool_name,
+            "target": s.target,
+            "status": s.status.value,
+            "command": cmd,
+            "execution_time": exec_time,
+            "return_code": ret_code,
+            "started_at": s.started_at,
+            "completed_at": s.completed_at,
+            "raw_file": raw_file,
+            "log_file": log_file,
+        })
+
+    # 2. Timeline
+    timeline = []
+    for s in scans:
+        if s.started_at:
+            timeline.append(TimelineEntry(
+                timestamp=s.started_at,
+                tool=s.tool_name,
+                event="Scan Started",
+                details=f"Tool execution started against {s.target}",
+            ))
+        if s.completed_at:
+            timeline.append(TimelineEntry(
+                timestamp=s.completed_at,
+                tool=s.tool_name,
+                event=f"Scan {s.status.value.capitalize()}",
+                details=f"Tool completed with status: {s.status.value}",
+            ))
+    for f in findings:
+        timeline.append(TimelineEntry(
+            timestamp=f.created_at,
+            tool=f.scan_id.split("_")[0] if f.scan_id else "system",
+            event="Finding Logged",
+            details=f"[{f.severity.value.upper()}] {f.title} ({f.affected_asset})",
+        ))
+    timeline.sort(key=lambda x: x.timestamp)
+
+    # 3. Subdomains
+    subdomains = set()
+    for f in findings:
+        # Suffix matching to target domain to see if it's a subdomain
+        if session.target:
+            from urllib.parse import urlparse
+            tgt_host = urlparse(session.target).hostname or session.target
+            if f.affected_asset and (f.affected_asset.endswith("." + tgt_host) or f.affected_asset == tgt_host):
+                subdomains.add(f.affected_asset)
+        if f.affected_asset and "." in f.affected_asset and not f.affected_asset.startswith("http"):
+            subdomains.add(f.affected_asset)
+    subdomain_inventory = sorted(list(subdomains))
+
+    # 4. Open ports
+    ports_map = {}
+    for f in findings:
+        match = re.search(r"open port (\d+)/(\w+)", f.title, re.IGNORECASE)
+        if match:
+            port_num = int(match.group(1))
+            proto = match.group(2)
+            key = (port_num, proto)
+            if key not in ports_map:
+                ports_map[key] = {
+                    "port": port_num,
+                    "protocol": proto,
+                    "hosts": set(),
+                    "service": "",
+                }
+            ports_map[key]["hosts"].add(f.affected_asset)
+            svc_match = re.search(r"running (\S+)", f.description, re.IGNORECASE)
+            if svc_match:
+                ports_map[key]["service"] = svc_match.group(1)
+    
+    open_port_inventory = []
+    for key, data in sorted(ports_map.items()):
+        open_port_inventory.append({
+            "port": data["port"],
+            "protocol": data["protocol"],
+            "service": data["service"] or _guess_service(data["port"]),
+            "hosts": sorted(list(data["hosts"])),
+        })
+
+    # 5. Asset inventory
+    assets_map = {}
+    for f in findings:
+        asset = f.affected_asset
+        if not asset:
+            continue
+        if asset not in assets_map:
+            assets_map[asset] = {
+                "host": asset,
+                "open_ports": set(),
+                "technologies": set(),
+                "findings_count": {s: 0 for s in ReportSeverity},
+            }
+        
+        port_match = re.search(r"open port (\d+)/(\w+)", f.title, re.IGNORECASE)
+        if port_match:
+            assets_map[asset]["open_ports"].add(f"{port_match.group(1)}/{port_match.group(2)}")
+            
+        if "discovered tech:" in f.title.lower():
+            tech_name = f.title.split(":", 1)[1].strip()
+            assets_map[asset]["technologies"].add(tech_name)
+            
+        sev = ReportSeverity(f.severity.value)
+        assets_map[asset]["findings_count"][sev] += 1
+
+    asset_inventory = []
+    for host, data in sorted(assets_map.items()):
+        asset_inventory.append({
+            "host": host,
+            "open_ports": sorted(list(data["open_ports"])),
+            "technologies": sorted(list(data["technologies"])),
+            "critical": data["findings_count"][ReportSeverity.CRITICAL],
+            "high": data["findings_count"][ReportSeverity.HIGH],
+            "medium": data["findings_count"][ReportSeverity.MEDIUM],
+            "low": data["findings_count"][ReportSeverity.LOW],
+            "info": data["findings_count"][ReportSeverity.INFO],
+        })
+
     report = Report(
         target=session.target,
         scope=", ".join(session.scope),
         summary=summary,
         vuln_cards=cards,
+        scan_timeline=timeline,
+        scan_history=scan_history,
+        asset_inventory=asset_inventory,
+        subdomain_inventory=subdomain_inventory,
+        open_port_inventory=open_port_inventory,
         methodology="Direct MCP tool execution controlled by Claude Code.",
     )
     return report, summary
@@ -524,6 +725,24 @@ def create_server() -> FastMCP:
 
 
 def _register_tools(server: FastMCP) -> None:
+    @server.tool()
+    async def health_check(tool_name: str) -> dict[str, Any]:
+        """Check the status, version, path, and recommended installation of a specific tool."""
+        from cybermcp.tools.health import health_check as hc
+        return await hc(tool_name)
+
+    @server.tool()
+    async def diagnostics() -> dict[str, Any]:
+        """Perform a diagnostics check on all priority pentesting tools in Vajra MCP."""
+        from cybermcp.tools.health import diagnostics as diag
+        results = await diag()
+        return {
+            "status": "success",
+            "diagnostics": results,
+            "total_tools": len(results),
+            "installed_count": sum(1 for r in results if r["installed"]),
+        }
+
     @server.tool()
     async def list_tools(category: str = "", available_only: bool = False) -> dict[str, Any]:
         tools = _get_registry().list_available() if available_only else _get_registry().list_tools()

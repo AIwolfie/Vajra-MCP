@@ -101,11 +101,21 @@ class NucleiTool(BaseTool):
         parsed["matched_count"] = len(findings)
         success = return_code == 0
 
+        target_extracted = ""
+        if parsed.get("results"):
+            target_extracted = parsed["results"][0].get("host", "") or parsed["results"][0].get("matched-at", "")
+
         return ToolResult(
             tool_name=self.name,
             success=success,
             raw_output=stdout,
-            parsed_data=parsed,
+            parsed_data={
+                "tool": self.name,
+                "target": target_extracted,
+                "findings": [f.model_dump() for f in findings],
+                "metadata": parsed,
+                "raw_file": "",
+            },
             findings=findings,
             error=stderr.strip() if return_code != 0 and not findings else "",
         )

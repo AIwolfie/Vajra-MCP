@@ -56,8 +56,13 @@ class WpscanTool(BaseTool):
                     evidence=json.dumps(vuln, default=str),
                     cve_ids=cves,
                     affected_asset=parsed.get("target_url", ""),
+                    tool_name=self.name,
                 )
             )
+
+        target_extracted = ""
+        if isinstance(parsed, dict):
+            target_extracted = parsed.get("target_url", "")
 
         success = return_code == 0 or bool(vulns)
         error = stderr.strip() if return_code != 0 and not vulns else ""
@@ -65,7 +70,13 @@ class WpscanTool(BaseTool):
             tool_name=self.name,
             success=success,
             raw_output=stdout,
-            parsed_data=parsed if isinstance(parsed, dict) else {"data": parsed},
+            parsed_data={
+                "tool": self.name,
+                "target": target_extracted,
+                "findings": [f.model_dump() for f in findings],
+                "metadata": parsed if isinstance(parsed, dict) else {"data": parsed},
+                "raw_file": "",
+            },
             findings=findings,
             error=error,
         )

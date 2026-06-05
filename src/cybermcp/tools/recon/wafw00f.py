@@ -54,8 +54,14 @@ class Wafw00fTool(BaseTool):
                     severity=Severity.INFO,
                     description=f"Detected WAF: {waf_name}",
                     evidence=waf_name,
+                    tool_name=self.name,
                 )
             )
+
+        target_extracted = ""
+        target_match = re.search(r"checking\s+(\S+)", stdout, re.IGNORECASE)
+        if target_match:
+            target_extracted = target_match.group(1).strip()
 
         success = return_code == 0 or bool(waf_name)
         error = stderr.strip() if return_code != 0 and not waf_name else ""
@@ -63,7 +69,13 @@ class Wafw00fTool(BaseTool):
             tool_name=self.name,
             success=success,
             raw_output=stdout,
-            parsed_data={"waf": waf_name, "detected": bool(waf_name)},
+            parsed_data={
+                "tool": self.name,
+                "target": target_extracted,
+                "findings": [f.model_dump() for f in findings],
+                "metadata": {"waf": waf_name, "detected": bool(waf_name)},
+                "raw_file": "",
+            },
             findings=findings,
             error=error,
         )

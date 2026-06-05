@@ -5,6 +5,9 @@
         {{ card.severity | severity_icon | safe }} {{ card.severity_label }}
       </p>
       <h3>{{ card.title }}</h3>
+      {% if card.tool_name %}
+        <span class="badge" style="background-color: #657786; font-size: 0.7rem; padding: 2px 5px; margin-top: 4px; display: inline-block;">{{ card.tool_name }}</span>
+      {% endif %}
     </div>
     {% if card.cvss_score is not none %}
       <strong class="cvss">{{ "%.1f"|format(card.cvss_score) }}</strong>

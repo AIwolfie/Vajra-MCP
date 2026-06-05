@@ -15,6 +15,14 @@ class SessionManager:
         self._database = database
         self._current_session_id: str | None = None
 
+    def _ensure_session_dirs(self, session_id: str) -> None:
+        from cybermcp.config import get_config
+        from pathlib import Path
+        cfg = get_config()
+        session_path = Path(cfg.sessions_dir) / session_id
+        for sub in ("scans", "screenshots", "reports", "artifacts"):
+            (session_path / sub).mkdir(parents=True, exist_ok=True)
+
     async def create_session(
         self,
         name: str = "",
@@ -29,14 +37,18 @@ class SessionManager:
             scope_excludes=scope_excludes,
         )
         self._current_session_id = session.id
+        self._ensure_session_dirs(session.id)
         return session
 
     async def ensure_session(self) -> SessionModel:
         if self._current_session_id:
             existing = await self._database.get_session(self._current_session_id)
             if existing is not None:
+                self._ensure_session_dirs(existing.id)
                 return existing
-        return await self.create_session(name="default")
+        session = await self.create_session(name="default")
+        self._ensure_session_dirs(session.id)
+        return session
 
     async def get_session(self, session_id: str) -> SessionModel | None:
         return await self._database.get_session(session_id)
@@ -45,6 +57,7 @@ class SessionManager:
         session = await self._database.get_session(session_id)
         if session is not None:
             self._current_session_id = session.id
+            self._ensure_session_dirs(session.id)
         return session
 
     async def get_current_session(self) -> SessionModel:

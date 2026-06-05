@@ -185,11 +185,21 @@ class NmapTool(BaseTool):
             run_stats["hosts_down"] = hosts_stat.get("down", "0")
             run_stats["hosts_total"] = hosts_stat.get("total", "0")
 
+        target_extracted = ""
+        if hosts:
+            target_extracted = hosts[0].get("ip", "") or (hosts[0].get("hostnames")[0] if hosts[0].get("hostnames") else "")
+
         return ToolResult(
             tool_name=self.name,
             success=True,
             raw_output=stdout,
-            parsed_data={"hosts": hosts, "run_stats": run_stats},
+            parsed_data={
+                "tool": self.name,
+                "target": target_extracted,
+                "findings": [f.model_dump() for f in findings],
+                "metadata": {"hosts": hosts, "run_stats": run_stats},
+                "raw_file": "",
+            },
             findings=findings,
         )
 

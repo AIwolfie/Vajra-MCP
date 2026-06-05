@@ -110,6 +110,48 @@ Run the direct `subfinder` MCP endpoint:
 }
 ```
 
+## Ready-to-Use Claude Code Prompts
+
+You can use the following prompts directly inside **Claude Code** to drive your security testing workflows:
+
+1. **Reconnaissance & Active Target Profiling:**
+   > "Vajra, run reconnaissance against example.com. Set the scope to example.com first, then run the auto_recon workflow with standard depth. Generate the HTML report when finished."
+
+2. **Subdomain Enumeration & Scanning:**
+   > "Enumerate subdomains for example.com. Use subfinder and assetfinder, check the scope, and probe all found subdomains with httpx to locate live services."
+
+3. **Vulnerability Assessment:**
+   > "Run nuclei against discovered hosts in the current session. Run with the default templates on target https://example.com, parse the findings, and check the timeline."
+
+4. **Reporting and Artifact Extraction:**
+   > "Generate report for current session. Retrieve the active session, check the timeline, list all open ports and technologies, and build the premium HTML report."
+
+## Diagnostics (Vajra MCP Doctor)
+
+Vajra MCP includes a `doctor` command-line diagnostic tool to verify your local configuration and priority binary installations.
+
+To run diagnostics:
+```powershell
+vajra-mcp doctor
+```
+
+This will run self-checks on all 15 priority security tools, detect their versions, identify missing environment variables/API keys, and display recommended installation commands.
+
+## Scan Artifact Storage
+
+Vajra MCP automatically logs and organizes all scan files, console traces, screenshots, and HTML reports inside a structured workspace:
+
+```text
+sessions/
+  <session-id>/
+    scans/          <-- Consolidated console stdout/stderr/time log per tool execution (.log)
+    screenshots/    <-- (Optional) Screen captures of target web interfaces
+    reports/        <-- Final security assessment HTML reports
+    artifacts/      <-- Raw XML/JSON output files saved directly from binaries (.xml, .json, .jsonl)
+```
+
+Parsed outputs returned to Claude Code contain direct file URI references in `raw_file`. Report files reference raw artifact paths and console logs.
+
 Run recon workflow helper:
 
 ```json

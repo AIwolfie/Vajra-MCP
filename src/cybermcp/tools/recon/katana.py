@@ -33,6 +33,8 @@ class KatanaTool(BaseTool):
         return cmd
 
     def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
+        from cybermcp.tools.base import Finding, Severity
+
         results: list[dict[str, Any]] = []
         for line in stdout.splitlines():
             line = line.strip()
@@ -44,13 +46,37 @@ class KatanaTool(BaseTool):
                 if line.startswith("http"):
                     results.append({"url": line})
 
+        findings: list[Finding] = []
+        for res in results:
+            url = res.get("url", "")
+            if url:
+                findings.append(Finding(
+                    title=f"Discovered Endpoint: {url}",
+                    severity=Severity.INFO,
+                    description=f"Katana crawler discovered endpoint: {url}",
+                    evidence=json.dumps(res, default=str),
+                    affected_asset=url,
+                    tool_name=self.name,
+                ))
+
+        target_extracted = ""
+        if results:
+            target_extracted = results[0].get("url", "") or results[0].get("request", {}).get("endpoint", "")
+
         success = return_code == 0 or bool(results)
         error = stderr.strip() if return_code != 0 and not results else ""
         return ToolResult(
             tool_name=self.name,
             success=success,
             raw_output=stdout,
-            parsed_data={"results": results, "count": len(results)},
+            parsed_data={
+                "tool": self.name,
+                "target": target_extracted,
+                "findings": [f.model_dump() for f in findings],
+                "metadata": {"results": results, "count": len(results)},
+                "raw_file": "",
+            },
+            findings=findings,
             error=error,
         )
 

@@ -25,6 +25,21 @@ class VajraMCPConfig(BaseSettings):
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
     host: str = "127.0.0.1"
     port: int = 8394
+    """Central configuration for Vajra MCP server."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="CYBERMCP_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Server
+    server_name: str = "Vajra MCP"
+    server_version: str = "1.0.0"
+    transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
+    host: str = "127.0.0.1"
+    port: int = 8394
 
     # HTTP/SSE authentication
     http_api_key: str = ""
@@ -33,6 +48,7 @@ class VajraMCPConfig(BaseSettings):
     # Storage
     db_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "vajra-mcp.db"))
     reports_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "reports"))
+    sessions_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "sessions"))
 
     # Logging
     log_level: str = "INFO"
@@ -61,17 +77,24 @@ class VajraMCPConfig(BaseSettings):
         return self.tool_paths.get(tool_name, default_binary)
 
     def ensure_dirs(self) -> None:
-        """Create data and reports directories if they don't exist."""
+        """Create data, reports, and sessions directories if they don't exist."""
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.reports_dir).mkdir(parents=True, exist_ok=True)
+        Path(self.sessions_dir).mkdir(parents=True, exist_ok=True)
 
 
 CyberMCPConfig = VajraMCPConfig
 
 
+_CONFIG_INSTANCE = None
+
+
 def get_config() -> VajraMCPConfig:
     """Singleton-style config loader."""
-    return VajraMCPConfig()
+    global _CONFIG_INSTANCE
+    if _CONFIG_INSTANCE is None:
+        _CONFIG_INSTANCE = VajraMCPConfig()
+    return _CONFIG_INSTANCE
 
 
 __all__ = ["VajraMCPConfig", "CyberMCPConfig", "get_config"]

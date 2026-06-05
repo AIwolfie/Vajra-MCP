@@ -59,8 +59,13 @@ class FeroxbusterTool(BaseTool):
                     description=f"feroxbuster discovered {url} with status {status}",
                     evidence=str(obj),
                     affected_asset=url,
+                    tool_name=self.name,
                 )
             )
+
+        target_extracted = ""
+        if results:
+            target_extracted = results[0].get("url", "")
 
         success = return_code == 0 or bool(results)
         error = stderr.strip() if return_code != 0 and not results else ""
@@ -68,7 +73,13 @@ class FeroxbusterTool(BaseTool):
             tool_name=self.name,
             success=success,
             raw_output=stdout,
-            parsed_data={"results": results, "count": len(results)},
+            parsed_data={
+                "tool": self.name,
+                "target": target_extracted,
+                "findings": [f.model_dump() for f in findings],
+                "metadata": {"results": results, "count": len(results)},
+                "raw_file": "",
+            },
             findings=findings,
             error=error,
         )

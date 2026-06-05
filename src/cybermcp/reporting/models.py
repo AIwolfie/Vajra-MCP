@@ -157,6 +157,10 @@ class Report(BaseModel):
     summary: ReportSummary = Field(default_factory=ReportSummary)
     vuln_cards: list[VulnCard] = Field(default_factory=list)
     scan_timeline: list[TimelineEntry] = Field(default_factory=list)
+    scan_history: list[dict[str, Any]] = Field(default_factory=list)
+    asset_inventory: list[dict[str, Any]] = Field(default_factory=list)
+    subdomain_inventory: list[str] = Field(default_factory=list)
+    open_port_inventory: list[dict[str, Any]] = Field(default_factory=list)
     methodology: str = ""
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

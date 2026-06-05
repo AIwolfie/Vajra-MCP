@@ -4,7 +4,164 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ report.title }}</title>
-  <style>{{ css }}</style>
+  <style>
+    {{ css }}
+    
+    /* Additional custom styles for new report elements */
+    .inventory-section {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e1e8ed;
+    }
+    .inventory-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      font-size: 0.95rem;
+    }
+    .inventory-table th, .inventory-table td {
+      border: 1px solid #e1e8ed;
+      padding: 10px 12px;
+      text-align: left;
+    }
+    .inventory-table th {
+      background-color: #f5f8fa;
+      font-weight: 600;
+      color: #333;
+    }
+    .inventory-table tr:nth-child(even) {
+      background-color: #fafbfd;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 3px;
+      color: #fff;
+      margin-right: 3px;
+      margin-bottom: 3px;
+    }
+    .badge-crit { background-color: #ff4757; }
+    .badge-high { background-color: #ff6b35; }
+    .badge-med { background-color: #ffa502; }
+    .badge-low { background-color: #2ed573; }
+    .badge-info { background-color: #1e90ff; }
+    
+    /* Timeline styles */
+    .timeline {
+      position: relative;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 10px 0;
+    }
+    .timeline::after {
+      content: '';
+      position: absolute;
+      width: 4px;
+      background-color: #e1e8ed;
+      top: 0;
+      bottom: 0;
+      left: 19px;
+      margin-left: -2px;
+    }
+    .timeline-item {
+      padding: 10px 40px;
+      position: relative;
+      background-color: inherit;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .timeline-item::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 11px;
+      background-color: white;
+      border: 4px solid #1e90ff;
+      top: 15px;
+      border-radius: 50%;
+      z-index: 1;
+    }
+    .timeline-content {
+      padding: 12px 18px;
+      background-color: #f8f9fa;
+      position: relative;
+      border-radius: 6px;
+      border: 1px solid #e1e8ed;
+    }
+    .timeline-time {
+      font-size: 0.8rem;
+      color: #657786;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    .timeline-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      font-size: 0.95rem;
+    }
+    .timeline-desc {
+      font-size: 0.85rem;
+      color: #333;
+    }
+    
+    /* Severity Chart styles */
+    .chart-container {
+      margin: 20px 0;
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 6px;
+      border: 1px solid #e1e8ed;
+    }
+    .chart-bar-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .chart-label {
+      width: 100px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .chart-bar-outer {
+      flex-grow: 1;
+      background-color: #e1e8ed;
+      height: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 0 15px;
+    }
+    .chart-bar-inner {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.5s ease-in-out;
+    }
+    .chart-count {
+      width: 30px;
+      text-align: right;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    
+    /* Grid layout */
+    .subdomain-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 15px 0;
+    }
+    .subdomain-card {
+      background: #f8f9fa;
+      border: 1px solid #e1e8ed;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+  </style>
 </head>
 <body>
   <main class="report">
@@ -23,14 +180,213 @@
       </div>
     </header>
 
+    <!-- Executive Summary Grid -->
     <section class="summary-grid">
-      <article><span>Total</span><strong>{{ report.summary.total_findings }}</strong></article>
+      <article><span>Total Findings</span><strong>{{ report.summary.total_findings }}</strong></article>
       <article><span>Critical</span><strong>{{ report.summary.critical_count }}</strong></article>
       <article><span>High</span><strong>{{ report.summary.high_count }}</strong></article>
       <article><span>Medium</span><strong>{{ report.summary.medium_count }}</strong></article>
       <article><span>Low</span><strong>{{ report.summary.low_count }}</strong></article>
-      <article><span>Risk</span><strong>{{ report.summary.risk_score }}</strong></article>
+      <article><span>Risk Score</span><strong>{{ report.summary.risk_score }} / 10</strong></article>
     </section>
+
+    <!-- Severity Charts -->
+    <section class="section">
+      <h2>Severity Distribution</h2>
+      <div class="chart-container">
+        {% set max_count = [report.summary.critical_count, report.summary.high_count, report.summary.medium_count, report.summary.low_count, report.summary.info_count] | max %}
+        {% set max_val = max_count if max_count > 0 else 1 %}
+        
+        <div class="chart-bar-row">
+          <div class="chart-label" style="color: #ff4757;">CRITICAL</div>
+          <div class="chart-bar-outer">
+            <div class="chart-bar-inner" style="width: {{ (report.summary.critical_count / max_val * 100) | round }}%; background-color: #ff4757;"></div>
+          </div>
+          <div class="chart-count">{{ report.summary.critical_count }}</div>
+        </div>
+        
+        <div class="chart-bar-row">
+          <div class="chart-label" style="color: #ff6b35;">HIGH</div>
+          <div class="chart-bar-outer">
+            <div class="chart-bar-inner" style="width: {{ (report.summary.high_count / max_val * 100) | round }}%; background-color: #ff6b35;"></div>
+          </div>
+          <div class="chart-count">{{ report.summary.high_count }}</div>
+        </div>
+        
+        <div class="chart-bar-row">
+          <div class="chart-label" style="color: #ffa502;">MEDIUM</div>
+          <div class="chart-bar-outer">
+            <div class="chart-bar-inner" style="width: {{ (report.summary.medium_count / max_val * 100) | round }}%; background-color: #ffa502;"></div>
+          </div>
+          <div class="chart-count">{{ report.summary.medium_count }}</div>
+        </div>
+        
+        <div class="chart-bar-row">
+          <div class="chart-label" style="color: #2ed573;">LOW</div>
+          <div class="chart-bar-outer">
+            <div class="chart-bar-inner" style="width: {{ (report.summary.low_count / max_val * 100) | round }}%; background-color: #2ed573;"></div>
+          </div>
+          <div class="chart-count">{{ report.summary.low_count }}</div>
+        </div>
+        
+        <div class="chart-bar-row">
+          <div class="chart-label" style="color: #1e90ff;">INFO</div>
+          <div class="chart-bar-outer">
+            <div class="chart-bar-inner" style="width: {{ (report.summary.info_count / max_val * 100) | round }}%; background-color: #1e90ff;"></div>
+          </div>
+          <div class="chart-count">{{ report.summary.info_count }}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scan History / Tool Execution Summary -->
+    {% if report.scan_history %}
+    <section class="section">
+      <h2>Scan History & Tool Execution Summary</h2>
+      <table class="inventory-table">
+        <thead>
+          <tr>
+            <th>Tool Name</th>
+            <th>Target</th>
+            <th>Status</th>
+            <th>Started At</th>
+            <th>Execution Time</th>
+            <th>Exit Code</th>
+            <th>Artifacts & Logs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for scan in report.scan_history %}
+          <tr>
+            <td><strong>{{ scan.tool_name }}</strong></td>
+            <td><code>{{ scan.target }}</code></td>
+            <td>
+              <span class="badge" style="background-color: {% if scan.status == 'completed' %}#2ed573{% elif scan.status == 'failed' %}#ff4757{% else %}#ffa502{% endif %};">
+                {{ scan.status | upper }}
+              </span>
+            </td>
+            <td>{{ scan.started_at | format_dt if scan.started_at else 'N/A' }}</td>
+            <td>{{ scan.execution_time | round(2) }}s</td>
+            <td><code>{{ scan.return_code }}</code></td>
+            <td style="font-size: 0.85rem;">
+              <div>Raw output: <a href="file:///{{ scan.raw_file | replace('\\', '/') }}" target="_blank">raw_file</a></div>
+              <div style="margin-top: 4px;">Console log: <a href="file:///{{ scan.log_file | replace('\\', '/') }}" target="_blank">log_file</a></div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <!-- Timeline of Scan Events -->
+    {% if report.scan_timeline %}
+    <section class="section">
+      <h2>Activity Timeline</h2>
+      <div class="timeline">
+        {% for event in report.scan_timeline %}
+        <div class="timeline-item">
+          <div class="timeline-content">
+            <div class="timeline-time">{{ event.timestamp | format_dt }}</div>
+            <div class="timeline-title">
+              <span style="color: #1e90ff; font-weight: 700;">{{ event.tool | upper }}</span> - {{ event.event }}
+            </div>
+            <div class="timeline-desc">{{ event.details }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Asset Inventory -->
+    {% if report.asset_inventory %}
+    <section class="section inventory-section">
+      <h2>Asset Inventory</h2>
+      <p>Summary of unique scanned assets, open ports, and vulnerabilities.</p>
+      <table class="inventory-table">
+        <thead>
+          <tr>
+            <th>Host / Asset</th>
+            <th>Open Ports</th>
+            <th>Detected Technologies</th>
+            <th>Findings (Severity)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for asset in report.asset_inventory %}
+          <tr>
+            <td><strong>{{ asset.host }}</strong></td>
+            <td>
+              {% if asset.open_ports %}
+                {% for port in asset.open_ports %}
+                  <span class="badge" style="background-color: #657786;">{{ port }}</span>
+                {% endfor %}
+              {% else %}
+                <span style="color: #657786; font-style: italic;">None detected</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if asset.technologies %}
+                {{ asset.technologies | join(', ') }}
+              {% else %}
+                <span style="color: #657786; font-style: italic;">None identified</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if asset.critical > 0 %}<span class="badge badge-crit">Crit: {{ asset.critical }}</span>{% endif %}
+              {% if asset.high > 0 %}<span class="badge badge-high">High: {{ asset.high }}</span>{% endif %}
+              {% if asset.medium > 0 %}<span class="badge badge-med">Med: {{ asset.medium }}</span>{% endif %}
+              {% if asset.low > 0 %}<span class="badge badge-low">Low: {{ asset.low }}</span>{% endif %}
+              {% if asset.info > 0 %}<span class="badge badge-info">Info: {{ asset.info }}</span>{% endif %}
+              {% if asset.critical == 0 and asset.high == 0 and asset.medium == 0 and asset.low == 0 and asset.info == 0 %}
+                <span style="color: #2ed573; font-weight: 600;">Clean</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+
+    <!-- Subdomain Inventory -->
+    {% if report.subdomain_inventory %}
+    <section class="section inventory-section">
+      <h2>Subdomain Inventory</h2>
+      <p>Discovered subdomains for the target scope:</p>
+      <div class="subdomain-grid">
+        {% for sub in report.subdomain_inventory %}
+        <div class="subdomain-card">{{ sub }}</div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Open Port Inventory -->
+    {% if report.open_port_inventory %}
+    <section class="section inventory-section">
+      <h2>Open Port Inventory</h2>
+      <table class="inventory-table">
+        <thead>
+          <tr>
+            <th>Port</th>
+            <th>Service</th>
+            <th>Hosts / Assets Affected</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for port_group in report.open_port_inventory %}
+          <tr>
+            <td><code>{{ port_group.port }}/{{ port_group.protocol | upper }}</code></td>
+            <td><strong>{{ port_group.service | upper }}</strong></td>
+            <td>{{ port_group.hosts | join(', ') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
 
     {% if report.methodology %}
     <section class="section">
@@ -39,8 +395,9 @@
     </section>
     {% endif %}
 
+    <!-- Findings Cards -->
     <section class="section">
-      <h2>Findings</h2>
+      <h2>Detailed Findings</h2>
       {% if cards %}
         <div class="findings">
           {% for card in cards %}

@@ -92,14 +92,33 @@ Vajra MCP is not published on PyPI. Clone the repository and install in editable
 ```bash
 git clone https://github.com/AIwolfie/Vajra-MCP.git
 cd Vajra-MCP
+```
+
+#### Option A: Virtual Environment (Recommended)
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -e .
+```
+
+#### Option B: System-wide User Install (Kali/Debian PEP 668)
+If installing on a Linux system with an externally managed environment (such as Kali Linux) without a virtual environment, append the `--break-system-packages` flag:
+```bash
+pip install -e . --break-system-packages
 ```
 
 ### Optional PDF Report Support
 To enable PDF report generation (requires Cairo, Pango, and GObject libraries installed on your host system):
-```bash
-pip install -e ".[pdf]"
-```
+
+* **Virtual Environment**:
+  ```bash
+  pip install -e ".[pdf]"
+  ```
+* **System-wide (Kali/Debian PEP 668)**:
+  ```bash
+  pip install -e ".[pdf]" --break-system-packages
+  ```
+
 
 ---
 

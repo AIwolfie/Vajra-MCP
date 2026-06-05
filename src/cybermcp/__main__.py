@@ -1,4 +1,4 @@
-"""CyberMCP entry point — launch the MCP server with configurable transport."""
+"""Vajra MCP entry point for configurable MCP transports."""
 
 import argparse
 import sys
@@ -17,8 +17,8 @@ def _requires_http_auth(transport: str, host: str, allow_localhost: bool) -> boo
 def main() -> None:
     cfg = get_config()
     parser = argparse.ArgumentParser(
-        prog="cybermcp",
-        description="CyberMCP — AI Cybersecurity Platform MCP Server",
+        prog="vajra-mcp",
+        description="Vajra MCP - MCP execution backend for Claude Code security workflows",
     )
     parser.add_argument(
         "--transport",

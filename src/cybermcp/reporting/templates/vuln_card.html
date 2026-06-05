@@ -1,0 +1,37 @@
+<article class="finding-card severity-{{ card.severity.value }}">
+  <header>
+    <div>
+      <p class="severity" style="color: {{ card.severity | severity_color }}">
+        {{ card.severity | severity_icon | safe }} {{ card.severity_label }}
+      </p>
+      <h3>{{ card.title }}</h3>
+    </div>
+    {% if card.cvss_score is not none %}
+      <strong class="cvss">{{ "%.1f"|format(card.cvss_score) }}</strong>
+    {% endif %}
+  </header>
+
+  {% if card.affected_asset %}
+    <p class="asset">{{ card.affected_asset }}</p>
+  {% endif %}
+
+  <p>{{ card.description }}</p>
+
+  {% if card.evidence %}
+    <section>
+      <h4>Evidence</h4>
+      <pre>{{ card.evidence }}</pre>
+    </section>
+  {% endif %}
+
+  {% if card.remediation %}
+    <section>
+      <h4>Remediation</h4>
+      <p>{{ card.remediation }}</p>
+    </section>
+  {% endif %}
+
+  {% if card.cve_ids %}
+    <p class="cves">{{ card.cve_ids | join(", ") }}</p>
+  {% endif %}
+</article>

@@ -1,4 +1,4 @@
-"""Session manager backed by the primary CyberMCP SQLite database."""
+"""Session manager backed by the primary Vajra MCP SQLite database."""
 
 from __future__ import annotations
 

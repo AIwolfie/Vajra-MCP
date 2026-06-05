@@ -1,4 +1,4 @@
-"""CyberMCP recon tool wrappers — network reconnaissance and discovery."""
+"""Vajra MCP recon tool wrappers for network reconnaissance and discovery."""
 
 from cybermcp.tools.recon.nmap import NmapTool
 from cybermcp.tools.recon.masscan import MasscanTool

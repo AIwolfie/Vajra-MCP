@@ -1,4 +1,4 @@
-"""CyberMCP configuration — Pydantic Settings with .env support."""
+"""Vajra MCP configuration with Pydantic Settings and .env support."""
 
 from pathlib import Path
 from typing import Literal
@@ -9,8 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-class CyberMCPConfig(BaseSettings):
-    """Central configuration for CyberMCP server."""
+class VajraMCPConfig(BaseSettings):
+    """Central configuration for Vajra MCP server."""
 
     model_config = SettingsConfigDict(
         env_prefix="CYBERMCP_",
@@ -20,7 +20,7 @@ class CyberMCPConfig(BaseSettings):
     )
 
     # Server
-    server_name: str = "CyberMCP"
+    server_name: str = "Vajra MCP"
     server_version: str = "1.0.0"
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
     host: str = "127.0.0.1"
@@ -31,7 +31,7 @@ class CyberMCPConfig(BaseSettings):
     allow_localhost_no_auth: bool = False
 
     # Storage
-    db_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "cybermcp.db"))
+    db_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "vajra-mcp.db"))
     reports_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "reports"))
 
     # Logging
@@ -66,9 +66,12 @@ class CyberMCPConfig(BaseSettings):
         Path(self.reports_dir).mkdir(parents=True, exist_ok=True)
 
 
-def get_config() -> CyberMCPConfig:
+CyberMCPConfig = VajraMCPConfig
+
+
+def get_config() -> VajraMCPConfig:
     """Singleton-style config loader."""
-    return CyberMCPConfig()
+    return VajraMCPConfig()
 
 
-__all__ = ["CyberMCPConfig", "get_config"]
+__all__ = ["VajraMCPConfig", "CyberMCPConfig", "get_config"]

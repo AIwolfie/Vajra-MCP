@@ -27,7 +27,7 @@ class _MissingBinaryTool(BaseTool):
     name = "missing-binary"
     description = "Missing binary test tool"
     category = ToolCategory.RECON
-    binary_name = "cybermcp-definitely-missing-binary"
+    binary_name = "vajra-mcp-definitely-missing-binary"
     input_model = _DummyInput
 
     def build_command(self, input_data: _DummyInput) -> list[str]:
@@ -122,7 +122,7 @@ class ExecutorTest(unittest.IsolatedAsyncioTestCase):
 class SessionDatabaseTest(unittest.IsolatedAsyncioTestCase):
     async def test_session_manager_uses_primary_database_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            db = Database(str(Path(tmp) / "cybermcp.db"))
+            db = Database(str(Path(tmp) / "vajra-mcp.db"))
             await db.init()
             try:
                 manager = SessionManager(db)

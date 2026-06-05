@@ -1,7 +1,7 @@
 [project]
-name = "cybermcp"
+name = "vajra-mcp"
 version = "1.0.0"
-description = "AI Cybersecurity Platform — MCP server bridging AI assistants to 150+ pentesting tools"
+description = "Vajra MCP - precise, resilient MCP execution backend for Claude Code security workflows"
 requires-python = ">=3.11"
 dependencies = [
     "mcp[cli]>=1.0.0",
@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 cybermcp = "cybermcp.__main__:main"
+vajra-mcp = "cybermcp.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

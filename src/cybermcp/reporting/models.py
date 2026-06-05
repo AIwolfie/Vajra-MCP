@@ -151,7 +151,7 @@ class Report(BaseModel):
     """Top-level report container."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
-    title: str = "CyberMCP Security Assessment Report"
+    title: str = "Vajra MCP Security Assessment Report"
     target: str = ""
     scope: str = ""
     summary: ReportSummary = Field(default_factory=ReportSummary)

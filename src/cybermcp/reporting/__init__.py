@@ -1,4 +1,4 @@
-"""CyberMCP reporting engine — vulnerability cards, scoring, and HTML report generation."""
+"""Vajra MCP reporting engine for vulnerability cards, scoring, and HTML output."""
 
 from cybermcp.reporting.models import Finding, Report, ReportSummary, Severity, VulnCard
 from cybermcp.reporting.scorer import CVSSScorer

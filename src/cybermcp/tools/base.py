@@ -1,4 +1,4 @@
-"""Base classes and models for the CyberMCP tool framework."""
+"""Base classes and models for the Vajra MCP tool framework."""
 
 from __future__ import annotations
 
@@ -89,6 +89,7 @@ class BaseTool(ABC):
     description: str = ""
     category: ToolCategory = ToolCategory.RECON
     binary_name: str = ""
+    binary_candidates: list[str] = []
     tags: list[str] = []
     timeout: int = 300
     needs_root: bool = False
@@ -111,7 +112,15 @@ class BaseTool(ABC):
             configured = get_config().get_tool_path(self.name, self.binary_name)
         except Exception:
             configured = self.binary_name
-        return shutil.which(configured) or configured
+        candidates = [configured]
+        candidates.extend(candidate for candidate in self.binary_candidates if candidate not in candidates)
+        for candidate in candidates:
+            resolved = shutil.which(candidate)
+            if resolved:
+                return resolved
+            if Path(candidate).exists():
+                return candidate
+        return configured
 
     @abstractmethod
     def build_command(self, input_data: BaseModel) -> list[str]:

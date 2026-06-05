@@ -1,15 +1,16 @@
-"""CyberMCP FastMCP server for direct Phase 1 tool execution."""
+"""Vajra MCP FastMCP server for direct tool execution and workflow helpers."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import ValidationError
 
-from cybermcp.config import CyberMCPConfig, get_config
+from cybermcp.config import VajraMCPConfig, get_config
 from cybermcp.core.scope import ScopeManager
 from cybermcp.core.session import SessionManager
 from cybermcp.db.database import Database
@@ -25,7 +26,7 @@ from cybermcp.utils.sanitizer import sanitize_target
 
 logger = get_logger(__name__)
 
-_PHASE1_TOOLS = {
+_PRIORITY_TOOLS = {
     "subfinder",
     "amass",
     "assetfinder",
@@ -44,7 +45,7 @@ _PHASE1_TOOLS = {
 }
 
 _db: Database | None = None
-_config: CyberMCPConfig | None = None
+_config: VajraMCPConfig | None = None
 _registry: ToolRegistry | None = None
 _executor: ToolExecutor | None = None
 _scope_manager: ScopeManager | None = None
@@ -57,7 +58,7 @@ def _get_db() -> Database:
     return _db
 
 
-def _get_config() -> CyberMCPConfig:
+def _get_config() -> VajraMCPConfig:
     if _config is None:
         raise RuntimeError("Config not loaded")
     return _config
@@ -216,9 +217,9 @@ async def _execute_tool(
     normalized_tool_name = tool_name.strip().lower()
     registry = _get_registry()
     tool = registry.get(normalized_tool_name)
-    if tool is None or normalized_tool_name not in _PHASE1_TOOLS:
+    if tool is None or normalized_tool_name not in _PRIORITY_TOOLS:
         return _error_response(
-            f"Tool '{normalized_tool_name}' is not registered for Phase 1",
+            f"Tool '{normalized_tool_name}' is not registered for Vajra MCP priority execution",
             tool_name=normalized_tool_name,
         )
 
@@ -323,6 +324,168 @@ async def _build_report(session_id: str) -> tuple[Report, ReportSummary]:
     return report, summary
 
 
+def _hostname_for_workflow(target: str) -> str:
+    parsed = urlparse(target)
+    if parsed.hostname:
+        return parsed.hostname
+    return target.split("/", 1)[0]
+
+
+def _append_workflow_result(
+    tool_runs: list[dict[str, Any]],
+    tool_name: str,
+    response: dict[str, Any],
+) -> None:
+    tool_runs.append(
+        {
+            "tool_name": tool_name,
+            "status": response.get("status", "error"),
+            "scan_id": response.get("scan_id", ""),
+            "summary": response.get("result", {}).get("parsed_data", {}),
+            "error": response.get("result", {}).get("error", response.get("message", "")),
+        }
+    )
+
+
+async def _auto_recon_workflow(
+    target: str,
+    *,
+    depth: str = "standard",
+    timeout: int | None = None,
+    max_hosts: int = 25,
+) -> dict[str, Any]:
+    clean_target = sanitize_target(target)
+    session = await _ensure_session()
+    scope_decision = _get_scope_manager().evaluate_target(clean_target)
+    if not scope_decision["allowed"]:
+        return _error_response(
+            f"Target '{clean_target}' is outside allowed scope",
+            session_id=session.id,
+            tool_name="auto_recon",
+            scope=scope_decision,
+        )
+    await _get_session_manager().update_target(session.id, clean_target)
+
+    hostname = _hostname_for_workflow(clean_target)
+    tool_runs: list[dict[str, Any]] = []
+    subdomains: set[str] = set()
+
+    for tool_name in ("subfinder", "amass", "assetfinder"):
+        response = await _execute_tool(tool_name, {"domain": hostname}, timeout=timeout)
+        _append_workflow_result(tool_runs, tool_name, response)
+        discovered = response.get("result", {}).get("parsed_data", {}).get("subdomains", [])
+        if isinstance(discovered, list):
+            subdomains.update(str(item) for item in discovered if item)
+
+    probe_targets = [clean_target]
+    for subdomain in sorted(subdomains):
+        if len(probe_targets) >= max_hosts:
+            break
+        probe_targets.append(subdomain)
+
+    for probe_target in probe_targets:
+        response = await _execute_tool("httpx", {"target": probe_target}, timeout=timeout)
+        _append_workflow_result(tool_runs, "httpx", response)
+
+    crawl_depth = 1 if depth == "quick" else 2
+    for tool_name, args in (
+        ("katana", {"target": clean_target, "depth": crawl_depth, "js_crawl": depth == "deep"}),
+        ("whatweb", {"target": clean_target, "aggressive": depth == "deep"}),
+        ("wafw00f", {"target": clean_target}),
+    ):
+        response = await _execute_tool(tool_name, args, timeout=timeout)
+        _append_workflow_result(tool_runs, tool_name, response)
+
+    nmap_ports = "80,443,8080,8443" if depth == "quick" else "21-23,25,53,80,110,111,135,139,143,443,445,993,995,1723,3306,3389,5900,8080,8443"
+    nmap_response = await _execute_tool(
+        "nmap",
+        {
+            "target": hostname,
+            "ports": nmap_ports,
+            "scan_type": "connect",
+            "timing": "T3",
+            "service_detection": True,
+        },
+        timeout=timeout,
+    )
+    _append_workflow_result(tool_runs, "nmap", nmap_response)
+
+    return {
+        "status": "success",
+        "workflow": "auto_recon",
+        "session_id": session.id,
+        "target": clean_target,
+        "depth": depth,
+        "subdomains": sorted(subdomains),
+        "subdomain_count": len(subdomains),
+        "tool_runs": tool_runs,
+    }
+
+
+async def _web_audit_workflow(
+    target: str,
+    *,
+    checks: list[str] | None = None,
+    wordlist: str = "",
+    timeout: int | None = None,
+) -> dict[str, Any]:
+    clean_target = sanitize_target(target)
+    session = await _ensure_session()
+    scope_decision = _get_scope_manager().evaluate_target(clean_target)
+    if not scope_decision["allowed"]:
+        return _error_response(
+            f"Target '{clean_target}' is outside allowed scope",
+            session_id=session.id,
+            tool_name="web_audit",
+            scope=scope_decision,
+        )
+    await _get_session_manager().update_target(session.id, clean_target)
+
+    requested = {check.lower() for check in (checks or [])}
+    configured_wordlist = wordlist or _get_config().default_wordlist
+    tool_runs: list[dict[str, Any]] = []
+
+    def include(tool_name: str, tag: str) -> bool:
+        return not requested or tool_name in requested or tag in requested
+
+    planned: list[tuple[str, dict[str, Any], str]] = []
+    if include("nuclei", "vuln"):
+        planned.append(("nuclei", {"target": clean_target}, "vuln"))
+    if include("ffuf", "content"):
+        if configured_wordlist:
+            fuzz_url = clean_target.rstrip("/") + "/FUZZ"
+            planned.append(("ffuf", {"url": fuzz_url, "wordlist": configured_wordlist}, "content"))
+        else:
+            tool_runs.append({"tool_name": "ffuf", "status": "skipped", "reason": "wordlist_required"})
+    if include("feroxbuster", "content"):
+        if configured_wordlist:
+            planned.append(("feroxbuster", {"url": clean_target, "wordlist": configured_wordlist}, "content"))
+        else:
+            tool_runs.append({"tool_name": "feroxbuster", "status": "skipped", "reason": "wordlist_required"})
+    if include("dalfox", "xss"):
+        planned.append(("dalfox", {"target": clean_target}, "xss"))
+    if include("sqlmap", "sqli"):
+        planned.append(("sqlmap", {"url": clean_target, "batch": True, "level": 1, "risk": 1}, "sqli"))
+    if include("wpscan", "wordpress"):
+        planned.append(("wpscan", {"url": clean_target}, "wordpress"))
+    if include("testssl", "tls"):
+        planned.append(("testssl", {"target": clean_target}, "tls"))
+
+    for tool_name, args, _tag in planned:
+        response = await _execute_tool(tool_name, args, timeout=timeout)
+        _append_workflow_result(tool_runs, tool_name, response)
+
+    return {
+        "status": "success",
+        "workflow": "web_audit",
+        "session_id": session.id,
+        "target": clean_target,
+        "checks": sorted(requested) if requested else ["all"],
+        "wordlist_used": configured_wordlist,
+        "tool_runs": tool_runs,
+    }
+
+
 @asynccontextmanager
 async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     global _db, _config, _registry, _executor, _scope_manager, _session_manager
@@ -341,10 +504,10 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     _executor = ToolExecutor(scope_manager=_scope_manager)
     _session_manager = SessionManager(_db)
 
-    logger.info("CyberMCP Phase 1 server started: %s v%s", _config.server_name, _config.server_version)
+    logger.info("Vajra MCP server started: %s v%s", _config.server_name, _config.server_version)
     yield {}
     await _db.close()
-    logger.info("CyberMCP server shut down")
+    logger.info("Vajra MCP server shut down")
 
 
 def create_server() -> FastMCP:
@@ -364,12 +527,12 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool()
     async def list_tools(category: str = "", available_only: bool = False) -> dict[str, Any]:
         tools = _get_registry().list_available() if available_only else _get_registry().list_tools()
-        phase1_tools = [tool for tool in tools if tool["name"] in _PHASE1_TOOLS]
+        phase1_tools = [tool for tool in tools if tool["name"] in _PRIORITY_TOOLS]
         if category:
             phase1_tools = [tool for tool in phase1_tools if tool["category"] == category.lower()]
         return {
             "status": "success",
-            "phase": "phase_1",
+            "phase": "phase_2",
             "category_filter": category or "all",
             "available_only": available_only,
             "total_tools": len(phase1_tools),
@@ -477,6 +640,42 @@ def _register_tools(server: FastMCP) -> None:
         timeout: int | None = None,
     ) -> dict[str, Any]:
         return await _execute_tool(tool_name, args, timeout=timeout)
+
+    @server.tool()
+    async def auto_recon(
+        target: str,
+        depth: str = "standard",
+        timeout: int | None = None,
+        max_hosts: int = 25,
+    ) -> dict[str, Any]:
+        if depth not in {"quick", "standard", "deep"}:
+            return _error_response("Invalid auto_recon depth", details=depth)
+        try:
+            return await _auto_recon_workflow(
+                target,
+                depth=depth,
+                timeout=timeout,
+                max_hosts=max(1, min(max_hosts, 100)),
+            )
+        except ValueError as exc:
+            return _error_response("Invalid auto_recon target", details=str(exc))
+
+    @server.tool()
+    async def web_audit(
+        target: str,
+        checks: list[str] | None = None,
+        wordlist: str = "",
+        timeout: int | None = None,
+    ) -> dict[str, Any]:
+        try:
+            return await _web_audit_workflow(
+                target,
+                checks=checks,
+                wordlist=wordlist,
+                timeout=timeout,
+            )
+        except ValueError as exc:
+            return _error_response("Invalid web_audit target", details=str(exc))
 
     @server.tool()
     async def generate_html_report(session_id: str = "") -> dict[str, Any]:

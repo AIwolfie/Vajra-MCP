@@ -1,4 +1,4 @@
-"""CyberMCP database package."""
+"""Vajra MCP database package."""
 
 from cybermcp.db.database import Database
 from cybermcp.db.models import FindingModel, ScanModel, SessionModel, ToolRunModel

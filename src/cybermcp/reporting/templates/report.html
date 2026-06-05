@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ report.title }}</title>
+  <style>{{ css }}</style>
+</head>
+<body>
+  <main class="report">
+    <header class="report-header">
+      <div class="brand">
+        <div class="brand-mark">{{ logo_svg | safe }}</div>
+        <div>
+          <p class="eyebrow">Vajra MCP</p>
+          <h1>{{ report.title }}</h1>
+        </div>
+      </div>
+      <div class="meta">
+        <div><span>Target</span><strong>{{ report.target or "Not set" }}</strong></div>
+        <div><span>Scope</span><strong>{{ report.scope or "Not set" }}</strong></div>
+        <div><span>Generated</span><strong>{{ report.generated_at | format_dt }}</strong></div>
+      </div>
+    </header>
+
+    <section class="summary-grid">
+      <article><span>Total</span><strong>{{ report.summary.total_findings }}</strong></article>
+      <article><span>Critical</span><strong>{{ report.summary.critical_count }}</strong></article>
+      <article><span>High</span><strong>{{ report.summary.high_count }}</strong></article>
+      <article><span>Medium</span><strong>{{ report.summary.medium_count }}</strong></article>
+      <article><span>Low</span><strong>{{ report.summary.low_count }}</strong></article>
+      <article><span>Risk</span><strong>{{ report.summary.risk_score }}</strong></article>
+    </section>
+
+    {% if report.methodology %}
+    <section class="section">
+      <h2>Methodology</h2>
+      <p>{{ report.methodology }}</p>
+    </section>
+    {% endif %}
+
+    <section class="section">
+      <h2>Findings</h2>
+      {% if cards %}
+        <div class="findings">
+          {% for card in cards %}
+            {% include "vuln_card.html" %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="empty">No findings recorded for this session.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

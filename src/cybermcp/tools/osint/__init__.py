@@ -1,3 +1,3 @@
-"""CyberMCP OSINT tool wrappers — placeholder for Phase 2+ tools."""
+"""Vajra MCP OSINT tool wrappers."""
 
 __all__: list[str] = []

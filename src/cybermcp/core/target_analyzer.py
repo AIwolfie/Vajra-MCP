@@ -128,7 +128,7 @@ class TargetAnalyzer:
 
         hostname = _extract_hostname(target)
 
-        # Phase 1 — quick (always runs)
+        # Quick checks always run.
         await self._dns_resolve(hostname, profile)
         await self._port_scan(profile, quick=True)
         await self._grab_http_headers(hostname, profile)
@@ -150,7 +150,7 @@ class TargetAnalyzer:
         return profile
 
     # ------------------------------------------------------------------
-    # Phase 1: Quick
+    # Quick checks
     # ------------------------------------------------------------------
 
     async def _dns_resolve(self, hostname: str, profile: TargetProfile) -> None:
@@ -259,7 +259,7 @@ class TargetAnalyzer:
                         conn = HTTPSConnection(hostname, port, timeout=5, context=ctx)
                     else:
                         conn = HTTPConnection(hostname, port, timeout=5)
-                    conn.request("HEAD", "/", headers={"User-Agent": "CyberMCP/1.0"})
+                    conn.request("HEAD", "/", headers={"User-Agent": "Vajra-MCP/1.0"})
                     resp = conn.getresponse()
                     for k, v in resp.getheaders():
                         headers[k.lower()] = v

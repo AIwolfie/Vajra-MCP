@@ -33,7 +33,7 @@ def _uuid() -> str:
 
 
 class Database:
-    """Async SQLite database for CyberMCP persistence."""
+    """Async SQLite database for Vajra MCP persistence."""
 
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path

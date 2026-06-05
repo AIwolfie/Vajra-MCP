@@ -20,7 +20,8 @@ class TestsslTool(BaseTool):
     name = "testssl"
     description = "TLS/SSL configuration scanner"
     category = ToolCategory.WEB
-    binary_name = "testssl"
+    binary_name = "testssl.sh"
+    binary_candidates = ["testssl"]
     tags = ["tls", "ssl", "web", "crypto"]
     input_model = TestsslInput
 

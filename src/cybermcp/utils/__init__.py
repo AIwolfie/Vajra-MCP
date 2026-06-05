@@ -1,4 +1,4 @@
-"""CyberMCP utility modules."""
+"""Vajra MCP utility modules."""
 
 from cybermcp.utils.crypto import generate_api_token, generate_session_id, hash_finding
 from cybermcp.utils.logging import get_logger, setup_logging

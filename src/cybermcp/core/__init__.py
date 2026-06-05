@@ -1,4 +1,4 @@
-"""CyberMCP core primitives for Phase 1 scope, sessions, and target metadata."""
+"""Vajra MCP core primitives for scope, sessions, and target metadata."""
 
 from cybermcp.core.scope import ScopeDefinition, ScopeManager
 from cybermcp.core.session import SessionManager, SessionStatus

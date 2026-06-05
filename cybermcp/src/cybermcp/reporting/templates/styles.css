@@ -1,0 +1,498 @@
+/* CyberMCP Report — Shared Styles */
+/* Dark theme, modern card-based layout, severity color system */
+
+:root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #1c2128;
+    --border: #30363d;
+    --border-light: #3d444d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent: #1e90ff;
+    --accent-dim: #1a7ad9;
+    --severity-critical: #ff4757;
+    --severity-critical-bg: rgba(255, 71, 87, 0.12);
+    --severity-high: #ff6b35;
+    --severity-high-bg: rgba(255, 107, 53, 0.12);
+    --severity-medium: #ffa502;
+    --severity-medium-bg: rgba(255, 165, 2, 0.12);
+    --severity-low: #2ed573;
+    --severity-low-bg: rgba(46, 213, 115, 0.12);
+    --severity-info: #1e90ff;
+    --severity-info-bg: rgba(30, 144, 255, 0.12);
+    --font-sans: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,0.4);
+    --transition: 0.2s ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 15px; scroll-behavior: smooth; }
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+/* --- Header --- */
+.report-header {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 40px 0 32px;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 24px;
+}
+
+.header-left { display: flex; align-items: center; gap: 20px; }
+
+.logo svg { height: 48px; width: auto; }
+
+.header-meta h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+.header-meta .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.header-right {
+    text-align: right;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.header-right .target {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* --- Section --- */
+.section {
+    padding: 40px 0;
+}
+
+.section + .section {
+    border-top: 1px solid var(--border);
+}
+
+.section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title .icon {
+    font-size: 1.1rem;
+    color: var(--accent);
+}
+
+/* --- Metrics Grid --- */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.metric-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.metric-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow);
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+}
+
+/* --- Risk Score --- */
+.risk-gauge {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px 32px;
+    margin-bottom: 32px;
+}
+
+.risk-circle {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+}
+
+.risk-circle svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+
+.risk-circle .track { fill: none; stroke: var(--border); stroke-width: 8; }
+
+.risk-circle .fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.8s ease; }
+
+.risk-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.risk-info h3 {
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+}
+
+.risk-info p {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+/* --- Chart --- */
+.chart-container {
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.chart-canvas-wrap {
+    flex: 0 0 240px;
+    height: 240px;
+}
+
+.chart-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.legend-count {
+    font-weight: 700;
+    margin-left: auto;
+    min-width: 24px;
+    text-align: right;
+}
+
+/* --- Vulnerability Cards --- */
+.vuln-cards { display: flex; flex-direction: column; gap: 16px; }
+
+.vuln-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.vuln-card:hover {
+    border-color: var(--border-light);
+    box-shadow: var(--shadow);
+}
+
+.vuln-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 24px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.severity-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.severity-critical { background: var(--severity-critical-bg); color: var(--severity-critical); border: 1px solid var(--severity-critical); }
+.severity-high     { background: var(--severity-high-bg); color: var(--severity-high); border: 1px solid var(--severity-high); }
+.severity-medium   { background: var(--severity-medium-bg); color: var(--severity-medium); border: 1px solid var(--severity-medium); }
+.severity-low      { background: var(--severity-low-bg); color: var(--severity-low); border: 1px solid var(--severity-low); }
+.severity-info     { background: var(--severity-info-bg); color: var(--severity-info); border: 1px solid var(--severity-info); }
+
+.vuln-title {
+    font-size: 1rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+.vuln-cvss {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.vuln-toggle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: transform var(--transition);
+}
+
+.vuln-card.open .vuln-toggle { transform: rotate(180deg); }
+
+.vuln-card-body {
+    display: none;
+    padding: 0 24px 24px;
+    border-top: 1px solid var(--border);
+}
+
+.vuln-card.open .vuln-card-body { display: block; padding-top: 20px; }
+
+.vuln-field { margin-bottom: 16px; }
+
+.vuln-field-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.vuln-field-value {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.vuln-field-value code {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+}
+
+.evidence-block {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.vuln-meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.vuln-meta span { display: flex; align-items: center; gap: 4px; }
+
+.cve-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+}
+
+.cve-link:hover { text-decoration: underline; }
+
+/* --- Timeline --- */
+.timeline {
+    position: relative;
+    padding-left: 28px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 24px;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg-primary);
+}
+
+.timeline-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.timeline-event {
+    font-weight: 600;
+    margin: 2px 0;
+}
+
+.timeline-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* --- Tables --- */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.data-table th {
+    text-align: left;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+}
+
+.data-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.data-table tr:hover td {
+    background: var(--bg-tertiary);
+}
+
+/* --- Methodology --- */
+.methodology-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    color: var(--text-secondary);
+    line-height: 1.8;
+    font-size: 0.9rem;
+}
+
+/* --- Footer --- */
+.report-footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 0;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* --- Print --- */
+@media print {
+    body { background: #fff; color: #000; font-size: 12px; }
+    .report-header { background: #f5f5f5; }
+    .vuln-card-body { display: block !important; }
+    .vuln-toggle { display: none; }
+    .section { break-inside: avoid; }
+    .vuln-card { break-inside: avoid; border-color: #ccc; }
+    .metric-card { background: #f9f9f9; border-color: #ddd; }
+    .chart-canvas-wrap { display: none; }
+    :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f9f9f9;
+        --bg-tertiary: #f0f0f0;
+        --border: #dddddd;
+        --text-primary: #1a1a1a;
+        --text-secondary: #444444;
+        --text-muted: #888888;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-content { flex-direction: column; text-align: center; }
+    .header-right { text-align: center; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .risk-gauge { flex-direction: column; text-align: center; }
+    .chart-container { flex-direction: column; align-items: center; }
+    .container { padding: 0 16px; }
+}

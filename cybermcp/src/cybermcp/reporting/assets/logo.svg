@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e90ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Shield -->
+  <path d="M25 8 L43 14 L43 30 C43 42 25 52 25 52 C25 52 7 42 7 30 L7 14 Z"
+        fill="url(#shieldGrad)" stroke="none"/>
+  <!-- Lock icon inside shield -->
+  <rect x="20" y="26" width="10" height="8" rx="1" fill="#0d1117"/>
+  <path d="M22 26 L22 22 C22 19 28 19 28 22 L28 26" fill="none" stroke="#0d1117" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="25" cy="30" r="1.2" fill="#1e90ff"/>
+  <!-- Text -->
+  <text x="55" y="28" font-family="'Segoe UI',system-ui,sans-serif" font-size="20" font-weight="700" fill="#e6edf3" letter-spacing="0.5">Cyber</text>
+  <text x="123" y="28" font-family="'Segoe UI',system-ui,sans-serif" font-size="20" font-weight="700" fill="#1e90ff" letter-spacing="0.5">MCP</text>
+  <text x="55" y="45" font-family="'Segoe UI',system-ui,sans-serif" font-size="10" fill="#8b949e" letter-spacing="2">SECURITY PLATFORM</text>
+</svg>

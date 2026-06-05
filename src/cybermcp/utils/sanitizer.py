@@ -4,7 +4,6 @@ import ipaddress
 import os
 from pathlib import Path
 import re
-import shlex
 from urllib.parse import urlparse
 
 # Characters that must never appear in shell arguments

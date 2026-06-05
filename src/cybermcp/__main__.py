@@ -62,7 +62,7 @@ def main() -> None:
             console.print("\n[bold green]All priority tools are installed and ready to use![/bold green]")
         
         py_ver = f"{py_sys.version_info.major}.{py_sys.version_info.minor}.{py_sys.version_info.micro}"
-        console.print(f"\n[bold blue]System Information:[/bold blue]")
+        console.print("\n[bold blue]System Information:[/bold blue]")
         console.print(f"• Python version: {py_ver}")
         console.print(f"• Database Path: {cfg.db_path}")
         console.print(f"• Sessions Directory: {cfg.sessions_dir}")

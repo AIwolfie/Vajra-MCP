@@ -355,6 +355,7 @@ async def _build_report(session_id: str) -> tuple[Report, ReportSummary]:
     import re
     from pathlib import Path
     from cybermcp.reporting.models import TimelineEntry
+    from cybermcp.core.target_analyzer import _guess_service
 
     db = _get_db()
     session = await db.get_session(session_id)

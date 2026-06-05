@@ -8,7 +8,7 @@ from typing import Any
 
 import jinja2
 
-from cybermcp.reporting.models import Report, ReportSummary, Severity, VulnCard
+from cybermcp.reporting.models import Report, Severity, VulnCard
 
 __all__ = ["HTMLReportGenerator"]
 

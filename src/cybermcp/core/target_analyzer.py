@@ -203,7 +203,6 @@ class TargetAnalyzer:
             ports = list(range(1, 1025))
 
         loop = asyncio.get_running_loop()
-        open_ports: list[PortInfo] = []
 
         async def _check_port(port: int) -> PortInfo | None:
             try:

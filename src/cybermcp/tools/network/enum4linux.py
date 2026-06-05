@@ -108,7 +108,7 @@ class Enum4LinuxTool(BaseTool):
                     description="SMB null session access allows unauthenticated enumeration",
                     evidence="Null session established",
                     remediation="Restrict anonymous access via RestrictAnonymous registry key",
-                    affected_asset=input_model.target if hasattr(input_model, "target") else "",
+                    affected_asset=parsed["os_info"].get("host", ""),
                 ))
 
         if parsed["users"]:

@@ -6,10 +6,8 @@ import asyncio
 import ipaddress
 import logging
 import os
-import re
 import time
 from datetime import datetime, timezone
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -234,7 +232,6 @@ class ToolExecutor:
                             proc.kill()
                             break
                         # Check CPU utilization - best effort
-                        cpu_pct = p.cpu_percent(interval=0.1)
                         await asyncio.sleep(0.5)
                 except psutil.NoSuchProcess:
                     pass

@@ -59,7 +59,7 @@ class MasscanTool(BaseTool):
             try:
                 records = json.loads(clean)
             except json.JSONDecodeError:
-                lines = [l.strip().rstrip(",") for l in clean.splitlines() if l.strip().startswith("{")]
+                lines = [ln.strip().rstrip(",") for ln in clean.splitlines() if ln.strip().startswith("{")]
                 records = []
                 for line in lines:
                     try:

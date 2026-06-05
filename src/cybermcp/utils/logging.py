@@ -1,7 +1,6 @@
 """Structured logging with rich console handler."""
 
 import logging
-import sys
 from typing import Optional
 
 from rich.console import Console

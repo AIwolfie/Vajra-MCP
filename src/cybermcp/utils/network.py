@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlparse
 

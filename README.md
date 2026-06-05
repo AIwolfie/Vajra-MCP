@@ -122,6 +122,44 @@ To enable PDF report generation (requires Cairo, Pango, and GObject libraries in
 
 ---
 
+## Usage & Setup
+
+### 1. Run System Diagnostics (Doctor)
+Verify which third-party security scanners (e.g. Nmap, Nuclei, Sqlmap) are available on your system path and get suggestions for missing tools:
+```bash
+vajra-mcp doctor
+```
+
+### 2. Configure and Run the Server
+
+#### Method A: stdio Transport (For Claude Code Integration)
+To register Vajra MCP with your local Claude Code client, execute:
+
+* **Global Installation**:
+  ```bash
+  claude mcp add vajra-mcp vajra-mcp
+  ```
+* **Virtual Environment Installation**:
+  ```bash
+  claude mcp add vajra-mcp /path/to/Vajra-MCP/venv/bin/vajra-mcp
+  ```
+
+#### Method B: SSE/HTTP Transport (For Networked Clients)
+Running over SSE requires setting a secure HTTP API key or explicitly bypassing authentication for localhost:
+
+* **With Authentication (Recommended)**:
+  ```bash
+  export CYBERMCP_HTTP_API_KEY="your-secure-secret-key"
+  vajra-mcp --transport sse --host 127.0.0.1 --port 8394
+  ```
+* **Without Authentication (Localhost only)**:
+  ```bash
+  export CYBERMCP_ALLOW_LOCALHOST_NO_AUTH="true"
+  vajra-mcp --transport sse --host 127.0.0.1 --port 8394
+  ```
+
+---
+
 ## Claude Code Integration
 
 Vajra MCP integrates with Claude Code. Example prompts for the client:

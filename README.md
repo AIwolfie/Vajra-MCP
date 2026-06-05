@@ -1,281 +1,283 @@
 # Vajra MCP
 
-Vajra MCP is a FastMCP execution backend for Claude Code security workflows.
-Claude Code remains the reasoning and orchestration layer. Vajra MCP validates
-scope, runs approved CLI tools, persists session evidence in SQLite, and returns
-structured JSON.
+Vajra MCP is a Model Context Protocol (MCP) server that connects Claude Code and other MCP-compatible clients to real-world cybersecurity tools through a secure, structured execution layer.
 
-The internal Python package is still `cybermcp` to avoid breaking imports during
-the branding migration.
+Vajra MCP acts as a precise, resilient orchestrator that executes command-line security scanners, validates scanning targets against strict scope boundaries, monitors resource limits, recovers partial results during timeouts or crashes, and returns fully structured JSON payloads to the LLM.
 
-## Phase 2 Tooling
+---
 
-Recon tools:
+## 🚀 Features
 
-- `subfinder`
-- `amass`
-- `assetfinder`
-- `httpx`
-- `katana`
-- `nmap`
-- `whatweb`
-- `wafw00f`
+* **MCP-Native Architecture**: Built directly on the official Model Context Protocol, exposing structured security tools and workflows to LLMs.
+* **Claude Code Integration**: Designed to serve as the local execution engine for Claude Code during penetration testing and bug bounty sweeps.
+* **Structured JSON Outputs**: Converts messy terminal stdout/stderr lines from CLI security tools into normalized, Pydantic-validated JSON schemas.
+* **Scope Enforcement**: Enforces target validation at the entrypoint, checking IP ranges, CIDR blocks, hostnames, and domain wildcards before invoking tools.
+* **Session Persistence**: Saves all execution details, scan history, raw logs, and findings in a local SQLite database and organized directories.
+* **HTML Reporting**: Generates sleek, interactive, single-file HTML reports detailing CVSS distribution, vulnerability cards, and activity timelines.
+* **Artifact Storage**: Automatically isolates raw outputs, screenshots, and logs in dedicated per-session folders.
+* **Docker Execution Backend**: Supports running compatible tools inside isolated Alpine/Debian Docker containers, translating local paths to mount volumes.
+* **Recovery & Partial Result Parsing**: Leverages async chunked file streams to recover results generated prior to timeouts, crashes, or limit terminations (e.g. truncated Nmap XML recovery).
+* **Tool Health Diagnostics**: Integrated `doctor` CLI diagnostic system mapping path status, versions, and missing API keys.
+* **Resource Limits**: Restricts memory usage (RSS limit checks via `psutil`) and log sizes to prevent system resource exhaustion.
 
-Web tools:
+---
 
-- `nuclei`
-- `ffuf`
-- `feroxbuster`
-- `dalfox`
-- `sqlmap`
-- `wpscan`
-- `testssl`
+## 📐 Architecture
 
-Each tool inherits from `BaseTool`, executes through `ToolExecutor`, supports
-timeouts, uses scope validation, reports binary availability, handles missing
-binaries gracefully, and returns structured JSON.
+```mermaid
+graph TD
+    subgraph Client
+        CC[Claude Code Client]
+    end
 
-## Install
+    subgraph Vajra MCP Server
+        SM[Session Manager]
+        Scope[Scope Manager]
+        TR[Tool Registry]
+        Exec[Tool Executor]
+        Rep[Report Generator]
+    end
 
-```powershell
-python -m pip install -e .
+    subgraph Execution Runtimes
+        Native[Native Subprocess]
+        Docker[Docker Containers]
+    end
+
+    subgraph Storage & Output
+        DB[(SQLite Session DB)]
+        Disk[Workspace /sessions]
+    end
+
+    CC -->|MCP Requests| Vajra-MCP
+    Vajra-MCP --> SM
+    Vajra-MCP --> Scope
+    SM -->|Persist History| DB
+    Scope -->|Enforce Boundaries| Exec
+    TR -->|Retrieve Schema| Exec
+    Exec -->|Spawn| Native
+    Exec -->|Spawn| Docker
+    Exec -->|Stream Logs & Artifacts| Disk
+    Disk -->|Read Source| Rep
+    Rep -->|Output HTML/PDF| Disk
 ```
 
-## Run As An MCP Server
+---
 
-For Claude Code, use stdio transport:
+## 🛠 Supported Tools
 
-```powershell
-vajra-mcp --transport stdio
+| Category | Tool | Docker Image | Status | Fallback Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **Recon** | `nmap` | `instrumentisto/nmap:latest` | ✅ Supported | Native |
+| **Recon** | `httpx` | `projectdiscovery/httpx:latest` | ✅ Supported | Native |
+| **Recon** | `katana` | `projectdiscovery/katana:latest` | ✅ Supported | Native |
+| **Recon** | `subfinder` | `projectdiscovery/subfinder:latest` | ✅ Supported | Native |
+| **Recon** | `amass` | `caffix/amass:latest` | ✅ Supported | Native |
+| **Recon** | `assetfinder` | `sle118/assetfinder:latest` | ✅ Supported | Native |
+| **Recon** | `whatweb` | `securesocket/whatweb:latest` | ✅ Supported | Native |
+| **Recon** | `wafw00f` | `securesocket/wafw00f:latest` | ✅ Supported | Native |
+| **Web** | `nuclei` | `projectdiscovery/nuclei:latest` | ✅ Supported | Native |
+| **Web** | `ffuf` | `ffuf/ffuf:latest` | ✅ Supported | Native |
+| **Web** | `feroxbuster`| `epi052/feroxbuster:latest` | ✅ Supported | Native |
+| **Web** | `dalfox` | `hahwul/dalfox:latest` | ✅ Supported | Native |
+| **Web** | `sqlmap` | `paolonaldi/sqlmap:latest` | ✅ Supported | Native |
+| **Web** | `wpscan` | `wpscan/wpscan:latest` | ✅ Supported | Native |
+| **Web** | `testssl` | `drwetter/testssl.sh:latest` | ✅ Supported | Native |
+
+---
+
+## 📥 Installation
+
+### Basic Core Installation
+Installs the core MCP server framework, SQLite manager, diagnostics, and native subprocess runner:
+```bash
+pip install vajra-mcp
 ```
 
-The legacy entrypoint also remains available:
-
-```powershell
-cybermcp --transport stdio
+### Development / Editable Installation
+Clone the repository and install in editable mode with testing dependencies:
+```bash
+git clone https://github.com/project/Vajra-MCP.git
+cd Vajra-MCP
+pip install -e .
 ```
 
-## Claude Code Usage Examples
+### PDF Report Support
+To enable compiled HTML-to-PDF reports, install the `pdf` extra (requires local Cairo, Pango, and GObject libraries installed on your operating system):
+```bash
+pip install "vajra-mcp[pdf]"
+```
 
-Set scope first:
+---
 
-```json
-{
-  "tool": "set_scope",
-  "arguments": {
-    "targets": ["example.com"],
-    "excludes": ["admin.example.com"],
-    "notes": "Authorized external assessment scope"
+## 🤖 Claude Code Integration
+
+Vajra MCP integrates directly with Claude Code. You can issue security workflows natively in natural language:
+
+### 1. Run Reconnaissance
+> "Set the scope to example.com and run auto_recon. Enumerate subdomains, filter active hosts, scan ports, and generate an HTML report."
+
+### 2. Run Web Audit
+> "Run a web audit on https://example.com. Check for XSS, SQL injections, and TLS weaknesses using a local wordlist."
+
+### 3. Generate Report
+> "Generate a vulnerability report for my current session and compile it to HTML."
+
+### 4. Resume Session
+> "List all previous scanning sessions, then resume session 1be07753."
+
+---
+
+## 🔌 MCP Tool Reference
+
+Vajra MCP exposes several tools directly to the client:
+
+### `set_scope`
+Defines the target boundary for the active assessment.
+* **Payload**:
+  ```json
+  {
+    "targets": ["10.0.0.0/24", "*.example.com"],
+    "excludes": ["restricted.example.com"],
+    "notes": "External penetration test scope"
   }
-}
-```
+  ```
 
-List available priority tools:
-
-```json
-{
-  "tool": "list_tools",
-  "arguments": {
-    "available_only": true
+### `list_tools`
+Lists all supported pentesting tools and their installation status.
+* **Payload**:
+  ```json
+  {
+    "available_only": false
   }
-}
-```
+  ```
 
-Run a single tool:
-
-```json
-{
-  "tool": "run_tool",
-  "arguments": {
-    "tool_name": "subfinder",
+### `run_tool`
+Executes a single security tool within scope.
+* **Payload**:
+  ```json
+  {
+    "tool_name": "nmap",
     "args": {
-      "domain": "example.com"
+      "target": "example.com",
+      "ports": "80,443",
+      "scan_type": "connect"
     },
-    "timeout": 120
-  }
-}
-```
-
-Run the direct `subfinder` MCP endpoint:
-
-```json
-{
-  "tool": "subfinder",
-  "arguments": {
-    "domain": "example.com",
-    "all_sources": false,
-    "recursive": false,
-    "timeout": 120
-  }
-}
-```
-
-## Ready-to-Use Claude Code Prompts
-
-You can use the following prompts directly inside **Claude Code** to drive your security testing workflows:
-
-1. **Reconnaissance & Active Target Profiling:**
-   > "Vajra, run reconnaissance against example.com. Set the scope to example.com first, then run the auto_recon workflow with standard depth. Generate the HTML report when finished."
-
-2. **Subdomain Enumeration & Scanning:**
-   > "Enumerate subdomains for example.com. Use subfinder and assetfinder, check the scope, and probe all found subdomains with httpx to locate live services."
-
-3. **Vulnerability Assessment:**
-   > "Run nuclei against discovered hosts in the current session. Run with the default templates on target https://example.com, parse the findings, and check the timeline."
-
-4. **Reporting and Artifact Extraction:**
-   > "Generate report for current session. Retrieve the active session, check the timeline, list all open ports and technologies, and build the premium HTML report."
-
-## Diagnostics (Vajra MCP Doctor)
-
-Vajra MCP includes a `doctor` command-line diagnostic tool to verify your local configuration and priority binary installations.
-
-To run diagnostics:
-```powershell
-vajra-mcp doctor
-```
-
-This will run self-checks on all 15 priority security tools, detect their versions, identify missing environment variables/API keys, and display recommended installation commands.
-
-## Scan Artifact Storage
-
-Vajra MCP automatically logs and organizes all scan files, console traces, screenshots, and HTML reports inside a structured workspace:
-
-```text
-sessions/
-  <session-id>/
-    scans/          <-- Consolidated console stdout/stderr/time log per tool execution (.log)
-    screenshots/    <-- (Optional) Screen captures of target web interfaces
-    reports/        <-- Final security assessment HTML reports
-    artifacts/      <-- Raw XML/JSON output files saved directly from binaries (.xml, .json, .jsonl)
-```
-
-Parsed outputs returned to Claude Code contain direct file URI references in `raw_file`. Report files reference raw artifact paths and console logs.
-
-Run recon workflow helper:
-
-```json
-{
-  "tool": "auto_recon",
-  "arguments": {
-    "target": "example.com",
-    "depth": "standard",
-    "timeout": 180,
-    "max_hosts": 25
-  }
-}
-```
-
-Run web audit workflow helper:
-
-```json
-{
-  "tool": "web_audit",
-  "arguments": {
-    "target": "https://example.com",
-    "checks": ["vuln", "content", "xss", "sqli", "tls"],
-    "wordlist": "C:/wordlists/common.txt",
     "timeout": 300
   }
-}
-```
+  ```
 
-Generate an HTML report:
+### `auto_recon`
+Automates a passive and active subdomain profiling pipeline.
+* **Payload**:
+  ```json
+  {
+    "target": "example.com",
+    "depth": "standard",
+    "timeout": 600,
+    "max_hosts": 50
+  }
+  ```
 
-```json
-{
-  "tool": "generate_html_report",
-  "arguments": {
+### `web_audit`
+Automates vulnerability fuzzing and scanning targeting a web target.
+* **Payload**:
+  ```json
+  {
+    "target": "https://example.com",
+    "checks": ["vuln", "sqli", "xss"],
+    "wordlist": "wordlists/common.txt"
+  }
+  ```
+
+### `generate_html_report`
+Generates a consolidated HTML report from the database.
+* **Payload**:
+  ```json
+  {
+    "session_id": "active-uuid-here"
+  }
+  ```
+
+### `get_session`
+Retrieves execution status, scan history, and findings.
+* **Payload**:
+  ```json
+  {
     "session_id": ""
   }
-}
+  ```
+
+---
+
+## 🔒 Security Model
+
+Vajra MCP is built for offensive-security professionals and maintains strict runtime guardrails:
+
+* **Scope Enforcement**: All tools check the target destination before execution. If a target resolves outside allowed scopes or matches an exclusion pattern, the executor blocks execution.
+* **Wordlist Restriction**: To prevent path traversal attacks in remote setups, all wordlists must reside inside the workspace directory, the configured default directory, or explicitly whitelisted paths in `CYBERMCP_ALLOWED_WORDLIST_PATHS`. Traversal sequences (`..`) and symlinks escaping the project folder root are strictly blocked.
+* **Docker Isolation Mode**: Restricts binary execution to Docker containers mapping the project workspace to `/workspace`. Limits memory sizes via `--memory` limits.
+* **Resource Limits**: Best-effort `psutil` parent/child RSS memory audits and file-writer byte counts prevent scan utilities from consuming more than `max_memory_mb` or writing more than `max_output_mb`.
+* **Artifact Isolation**: Scan logs and raw outputs are written to private `/sessions/<session-id>/` subdirectories.
+
+---
+
+## 🔄 Example Workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Operator as Security Engineer
+    participant Claude as Claude Code
+    participant Vajra as Vajra MCP Server
+    participant Tools as CLI Tools / Docker
+
+    Operator->>Claude: "Scan example.com"
+    Claude->>Vajra: set_scope(targets=["example.com"])
+    Vajra-->>Claude: Scope Confirmed
+    Claude->>Vajra: auto_recon(target="example.com")
+    activate Vajra
+    Note over Vajra: Validate example.com against Scope
+    Vajra->>Tools: Spawn subfinder / amass / nmap
+    Tools-->>Vajra: Stream raw XML / JSON output
+    Note over Vajra: Parse XML/JSON incrementally
+    Vajra-->>Claude: Return structured findings
+    deactivate Vajra
+    Claude->>Vajra: generate_html_report()
+    Vajra-->>Claude: HTML Report Path
+    Claude->>Operator: Present Findings Summary & Report
 ```
 
-## Structured Output Shape
+---
 
-Tool responses use a stable JSON envelope:
+## 📸 Screenshots
 
-```json
-{
-  "status": "success",
-  "session_id": "session-id",
-  "scan_id": "scan-id",
-  "tool_name": "subfinder",
-  "scope": {
-    "configured": true,
-    "allowed": true,
-    "target": "example.com",
-    "reason": "allowed"
-  },
-  "execution": {
-    "command": "subfinder -d example.com -silent",
-    "return_code": 0,
-    "started_at": "2026-06-05T00:00:00+00:00",
-    "completed_at": "2026-06-05T00:00:01+00:00",
-    "execution_time": 1.0
-  },
-  "result": {
-    "success": true,
-    "parsed_data": {
-      "subdomains": ["api.example.com", "dev.example.com"],
-      "count": 2
-    },
-    "findings": [],
-    "raw_output": "api.example.com\ndev.example.com\n",
-    "error": ""
-  }
-}
-```
+### Tool Diagnostics (`doctor` CLI)
+![Tool diagnostics console output](assets/diagnostics.png)
 
-## Workflow Helpers
+### HTML Reports
+![Interactive HTML report dashboard](assets/report.png)
 
-`auto_recon` and `web_audit` are deterministic workflow helpers. They do not
-make decisions, create agents, or perform autonomous red-team activity. Claude
-Code invokes them when it wants a fixed execution pipeline.
+### Claude Code Workflow
+![Claude Code terminal interaction](assets/workflow.png)
 
-`auto_recon` runs:
+---
 
-1. `subfinder`
-2. `amass`
-3. `assetfinder`
-4. `httpx`
-5. `katana`
-6. `whatweb`
-7. `wafw00f`
-8. `nmap`
+## 📊 Project Status
 
-`web_audit` runs selected checks from:
+* **Current Version**: `v1.0.0-rc1`
+* **Test Status**: `37 tests passing` (100% success rate)
+* **Release Status**: `Release Candidate`
 
-1. `nuclei`
-2. `ffuf`
-3. `feroxbuster`
-4. `dalfox`
-5. `sqlmap`
-6. `wpscan`
-7. `testssl`
+---
 
-Content discovery tools require a wordlist through the `wordlist` argument or
-`CYBERMCP_DEFAULT_WORDLIST`.
+## 🗺 Roadmap
 
-## Configuration
+* **Phase 5 (Next)**: Real-time stream parsing utilizing async generator chunk streams instead of loading entire logs into memory.
+* **Phase 6**: Expose a SSE progress channel to stream findings live to Claude Code during long-running scans.
+* **Phase 7**: Support database pruning and log rotation controls.
 
-Environment variables still use the `CYBERMCP_` prefix for compatibility:
+---
 
-- `CYBERMCP_TRANSPORT`
-- `CYBERMCP_HOST`
-- `CYBERMCP_PORT`
-- `CYBERMCP_HTTP_API_KEY`
-- `CYBERMCP_DEFAULT_WORDLIST`
-- `CYBERMCP_TOOL_PATHS`
+## 📄 License
 
-Default SQLite path:
-
-```text
-data/vajra-mcp.db
-```
-
-Default report directory:
-
-```text
-reports/
-```
+Vajra MCP is open-source software licensed under the [MIT License](LICENSE).

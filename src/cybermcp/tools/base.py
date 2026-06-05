@@ -94,6 +94,32 @@ class BaseTool(ABC):
     timeout: int = 300
     needs_root: bool = False
     input_model: Type[BaseModel] = BaseModel
+    docker_capable: bool = False
+
+    def parse_output_file(
+        self,
+        stdout_path: str,
+        stderr_path: str,
+        return_code: int,
+        complete: bool = True
+    ) -> ToolResult:
+        """Parse process output from files. Default implementation reads files into memory and delegates to parse_output."""
+        stdout = ""
+        stderr = ""
+        try:
+            with open(stdout_path, "r", encoding="utf-8", errors="replace") as f:
+                stdout = f.read()
+        except Exception:
+            pass
+        try:
+            with open(stderr_path, "r", encoding="utf-8", errors="replace") as f:
+                stderr = f.read()
+        except Exception:
+            pass
+        result = self.parse_output(stdout, stderr, return_code)
+        if not complete:
+            result.parsed_data["partial"] = True
+        return result
 
     def is_available(self) -> bool:
         """Check whether the backing binary is on PATH."""

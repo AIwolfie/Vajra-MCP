@@ -277,5 +277,66 @@ class DoctorCLITest(unittest.TestCase):
             mock_console.return_value.print.assert_called()
 
 
+class WordlistValidationTest(unittest.TestCase):
+    def test_validate_wordlist_path_safe_relative(self) -> None:
+        from cybermcp.utils.sanitizer import validate_wordlist_path
+        # Relative paths resolving within project (default behavior) are allowed
+        result = validate_wordlist_path("src/cybermcp/config.py")
+        self.assertEqual(result, "src/cybermcp/config.py")
+
+    def test_validate_wordlist_path_traversal(self) -> None:
+        from cybermcp.utils.sanitizer import validate_wordlist_path
+        with self.assertRaises(ValueError) as context:
+            validate_wordlist_path("src/../../etc/passwd")
+        self.assertIn("Path traversal", str(context.exception))
+
+    def test_validate_wordlist_path_unsafe_absolute(self) -> None:
+        from cybermcp.utils.sanitizer import validate_wordlist_path
+        # Absolute system path outside project workspace should be rejected
+        with self.assertRaises(ValueError) as context:
+            validate_wordlist_path("/etc/passwd" if os.name != "nt" else "C:/Windows/win.ini")
+        self.assertIn("outside allowed locations", str(context.exception))
+
+    def test_validate_wordlist_path_explicitly_allowed(self) -> None:
+        from cybermcp.utils.sanitizer import validate_wordlist_path
+        # Allow via environment variable CYBERMCP_ALLOWED_WORDLIST_PATHS
+        allowed_path = "/tmp" if os.name != "nt" else "C:/Temp"
+        os.environ["CYBERMCP_ALLOWED_WORDLIST_PATHS"] = allowed_path
+        try:
+            # Let's test a path inside the allowed temp path
+            test_file = os.path.join(allowed_path, "wordlist.txt")
+            result = validate_wordlist_path(test_file)
+            self.assertEqual(result, test_file)
+        finally:
+            if "CYBERMCP_ALLOWED_WORDLIST_PATHS" in os.environ:
+                del os.environ["CYBERMCP_ALLOWED_WORDLIST_PATHS"]
+
+    def test_ffuf_input_model_validation(self) -> None:
+        from cybermcp.tools.web.ffuf import FfufInput
+        # Safe path should pass Pydantic validation
+        model = FfufInput(url="http://example.com/FUZZ", wordlist="src/cybermcp/__init__.py")
+        self.assertEqual(model.wordlist, "src/cybermcp/__init__.py")
+
+        # Unsafe path should fail Pydantic validation
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            FfufInput(url="http://example.com/FUZZ", wordlist="/etc/passwd" if os.name != "nt" else "C:/Windows/win.ini")
+
+    def test_feroxbuster_input_model_validation(self) -> None:
+        from cybermcp.tools.web.feroxbuster import FeroxbusterInput
+        # Safe path should pass
+        model = FeroxbusterInput(url="http://example.com", wordlist="src/cybermcp/__init__.py")
+        self.assertEqual(model.wordlist, "src/cybermcp/__init__.py")
+
+        # None should pass (optional wordlist)
+        model_none = FeroxbusterInput(url="http://example.com", wordlist=None)
+        self.assertIsNone(model_none.wordlist)
+
+        # Unsafe path should fail
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            FeroxbusterInput(url="http://example.com", wordlist="/etc/passwd" if os.name != "nt" else "C:/Windows/win.ini")
+
+
 if __name__ == "__main__":
     unittest.main()

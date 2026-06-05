@@ -40,6 +40,8 @@ class NucleiTool(BaseTool):
     tags = ["scanner", "templates", "vulnerability", "web"]
     input_model = NucleiInput
 
+    docker_capable = True
+
     def build_command(self, input_model: NucleiInput) -> list[str]:
         cmd = [self.get_binary_path(), "-u", input_model.target, "-jsonl", "-silent"]
 
@@ -57,68 +59,100 @@ class NucleiTool(BaseTool):
 
         return cmd
 
-    def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
+    def parse_output_file(
+        self,
+        stdout_path: str,
+        stderr_path: str,
+        return_code: int,
+        complete: bool = True
+    ) -> ToolResult:
         findings: list[Finding] = []
         parsed: dict[str, Any] = {"results": [], "matched_count": 0}
+        
+        try:
+            with open(stdout_path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
-        for line in stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+                    if len(parsed["results"]) < 1000:
+                        parsed["results"].append(obj)
 
-            parsed["results"].append(obj)
+                    template_id = obj.get("template-id", obj.get("templateID", "unknown"))
+                    matched_at = obj.get("matched-at", obj.get("matched", ""))
+                    info = obj.get("info", {})
+                    sev_str = info.get("severity", "info").lower()
+                    severity = _SEVERITY_MAP.get(sev_str, Severity.INFO)
+                    name = info.get("name", template_id)
+                    desc = info.get("description", "")
+                    reference = info.get("reference", [])
+                    references = reference if isinstance(reference, list) else [reference]
+                    cve_ids: list[str] = []
+                    for ref in references:
+                        cve_ids.extend(re.findall(r"CVE-\d{4}-\d{4,7}", str(ref), flags=re.IGNORECASE))
+                    cve_ids = sorted({cve.upper() for cve in cve_ids})
 
-            template_id = obj.get("template-id", obj.get("templateID", "unknown"))
-            matched_at = obj.get("matched-at", obj.get("matched", ""))
-            info = obj.get("info", {})
-            sev_str = info.get("severity", "info").lower()
-            severity = _SEVERITY_MAP.get(sev_str, Severity.INFO)
-            name = info.get("name", template_id)
-            desc = info.get("description", "")
-            reference = info.get("reference", [])
-            references = reference if isinstance(reference, list) else [reference]
-            cve_ids: list[str] = []
-            for ref in references:
-                cve_ids.extend(re.findall(r"CVE-\d{4}-\d{4,7}", str(ref), flags=re.IGNORECASE))
-            cve_ids = sorted({cve.upper() for cve in cve_ids})
-
-            findings.append(
-                Finding(
-                    title=f"{name} ({template_id})",
-                    severity=severity,
-                    description=desc or f"Nuclei template {template_id} matched",
-                    evidence=matched_at,
-                    remediation=info.get("remediation", ""),
-                    cve_ids=cve_ids,
-                    affected_asset=obj.get("host", matched_at),
-                )
-            )
+                    findings.append(
+                        Finding(
+                            title=f"{name} ({template_id})",
+                            severity=severity,
+                            description=desc or f"Nuclei template {template_id} matched",
+                            evidence=matched_at,
+                            remediation=info.get("remediation", ""),
+                            cve_ids=cve_ids,
+                            affected_asset=obj.get("host", matched_at),
+                        )
+                    )
+        except Exception:
+            pass
 
         parsed["matched_count"] = len(findings)
-        success = return_code == 0
+        success = complete and return_code == 0
+        if not complete or not success:
+            success = bool(findings)
 
         target_extracted = ""
         if parsed.get("results"):
             target_extracted = parsed["results"][0].get("host", "") or parsed["results"][0].get("matched-at", "")
 
+        parsed_data = {
+            "tool": self.name,
+            "target": target_extracted,
+            "findings": [f.model_dump() for f in findings],
+            "metadata": parsed,
+            "raw_file": "",
+        }
+        if not complete:
+            parsed_data["partial"] = True
+
         return ToolResult(
             tool_name=self.name,
             success=success,
-            raw_output=stdout,
-            parsed_data={
-                "tool": self.name,
-                "target": target_extracted,
-                "findings": [f.model_dump() for f in findings],
-                "metadata": parsed,
-                "raw_file": "",
-            },
+            raw_output="",
+            parsed_data=parsed_data,
             findings=findings,
-            error=stderr.strip() if return_code != 0 and not findings else "",
+            error="" if success else "Truncated or crashed scan",
         )
+
+    def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
+        import tempfile
+        import os
+        fd, path = tempfile.mkstemp()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(stdout)
+            os.close(fd)
+            return self.parse_output_file(path, "", return_code)
+        finally:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
 
 
 TOOLS = [NucleiTool()]

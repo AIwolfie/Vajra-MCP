@@ -15,7 +15,6 @@ class TestsslInput(BaseModel):
     target: str = Field(..., description="Target host or URL")
     full: bool = Field(False, description="Run full test suite")
 
-
 class TestsslTool(BaseTool):
     name = "testssl"
     description = "TLS/SSL configuration scanner"
@@ -24,16 +23,20 @@ class TestsslTool(BaseTool):
     binary_candidates = ["testssl"]
     tags = ["tls", "ssl", "web", "crypto"]
     input_model = TestsslInput
+    docker_capable = True
 
     def build_command(self, input_model: TestsslInput) -> list[str]:
-        import tempfile
-        import os
+        import uuid
+        from cybermcp.config import get_config
+        from pathlib import Path
 
         if not hasattr(self, "_json_files"):
             self._json_files = {}
 
-        fd, path = tempfile.mkstemp(suffix=".json")
-        os.close(fd)
+        # Generate temp file path inside sessions directory so it mounts in Docker
+        cfg = get_config()
+        temp_name = f"testssl_{uuid.uuid4().hex}.json"
+        path = str(Path(cfg.sessions_dir) / temp_name)
         self._json_files[input_model.target] = path
 
         cmd = [self.get_binary_path(), "--quiet", "--color", "0", "--jsonfile", path]
@@ -42,12 +45,25 @@ class TestsslTool(BaseTool):
         cmd.append(input_model.target)
         return cmd
 
-    def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
+    def parse_output_file(
+        self,
+        stdout_path: str,
+        stderr_path: str,
+        return_code: int,
+        complete: bool = True
+    ) -> ToolResult:
         import json
         import os
         from pathlib import Path
 
-        # Find the temp file
+        # Read stdout to get target matching
+        stdout = ""
+        try:
+            with open(stdout_path, "r", encoding="utf-8", errors="replace") as f:
+                stdout = f.read()
+        except Exception:
+            pass
+
         json_path = None
         target_extracted = ""
         target_match = re.search(r"Start\s+.*?\s+for\s+(\S+)", stdout, re.IGNORECASE)
@@ -100,14 +116,12 @@ class TestsslTool(BaseTool):
                 ))
         else:
             # Fallback to stdout parsing
-            issues: list[dict[str, str]] = []
             for line in stdout.splitlines():
                 clean = line.strip()
                 if not clean:
                     continue
                 if "VULNERABLE" in clean.upper() or "NOT OK" in clean.upper() or "NOT OK" in clean:
                     severity = Severity.HIGH if "VULNERABLE" in clean.upper() else Severity.MEDIUM
-                    issues.append({"issue": clean, "severity": severity.value})
                     findings.append(
                         Finding(
                             title="TLS issue detected",
@@ -119,22 +133,43 @@ class TestsslTool(BaseTool):
                         )
                     )
 
-        success = return_code == 0 or bool(findings)
-        error = stderr.strip() if return_code != 0 and not findings else ""
+        success = complete and return_code == 0
+        if not complete or not success:
+            success = bool(findings)
+
+        parsed_data = {
+            "tool": self.name,
+            "target": target_extracted,
+            "findings": [f.model_dump() for f in findings],
+            "metadata": {"results": results, "count": len(results)},
+            "raw_file": "",
+        }
+        if not complete:
+            parsed_data["partial"] = True
+
         return ToolResult(
             tool_name=self.name,
             success=success,
-            raw_output=stdout,
-            parsed_data={
-                "tool": self.name,
-                "target": target_extracted,
-                "findings": [f.model_dump() for f in findings],
-                "metadata": {"results": results, "count": len(results)},
-                "raw_file": "",
-            },
+            raw_output="",
+            parsed_data=parsed_data,
             findings=findings,
-            error=error,
+            error="" if success else "Truncated or crashed scan",
         )
+
+    def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
+        import tempfile
+        import os
+        fd, path = tempfile.mkstemp()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(stdout)
+            os.close(fd)
+            return self.parse_output_file(path, "", return_code)
+        finally:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
 
 
 TOOLS = [TestsslTool()]

@@ -21,22 +21,8 @@ class VajraMCPConfig(BaseSettings):
 
     # Server
     server_name: str = "Vajra MCP"
-    server_version: str = "1.0.0"
-    transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
-    host: str = "127.0.0.1"
-    port: int = 8394
-    """Central configuration for Vajra MCP server."""
+    server_version: str = "1.0.0rc1"
 
-    model_config = SettingsConfigDict(
-        env_prefix="CYBERMCP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    # Server
-    server_name: str = "Vajra MCP"
-    server_version: str = "1.0.0"
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio"
     host: str = "127.0.0.1"
     port: int = 8394
@@ -49,6 +35,28 @@ class VajraMCPConfig(BaseSettings):
     db_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "vajra-mcp.db"))
     reports_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "reports"))
     sessions_dir: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "sessions"))
+
+    # Hardening & Execution limits
+    execution_mode: Literal["native", "docker"] = "native"
+    max_memory_mb: int = 1024
+    max_output_mb: int = 500
+    docker_images: dict[str, str] = Field(default_factory=lambda: {
+        "nmap": "instrumentisto/nmap:latest",
+        "nuclei": "projectdiscovery/nuclei:latest",
+        "httpx": "projectdiscovery/httpx:latest",
+        "katana": "projectdiscovery/katana:latest",
+        "subfinder": "projectdiscovery/subfinder:latest",
+        "amass": "caffix/amass:latest",
+        "assetfinder": "sle118/assetfinder:latest",
+        "wafw00f": "securesocket/wafw00f:latest",
+        "whatweb": "securesocket/whatweb:latest",
+        "ffuf": "ffuf/ffuf:latest",
+        "feroxbuster": "epi052/feroxbuster:latest",
+        "dalfox": "hahwul/dalfox:latest",
+        "sqlmap": "paolonaldi/sqlmap:latest",
+        "wpscan": "wpscan/wpscan:latest",
+        "testssl": "drwetter/testssl.sh:latest",
+    })
 
     # Logging
     log_level: str = "INFO"

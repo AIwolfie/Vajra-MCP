@@ -273,53 +273,62 @@ async def _execute_tool(
     scan = await _get_db().create_scan(session.id, normalized_tool_name, cleaned_target, raw_args)
     await _get_db().update_scan_status(scan.id, ScanStatus.RUNNING)
 
-    result = await _get_executor().execute(
-        tool,
-        input_data,
-        timeout=timeout,
-        target=cleaned_target or None,
-    )
-    await _record_tool_result(session.id, scan.id, normalized_tool_name, result)
-    await _get_db().update_scan_status(
-        scan.id,
-        ScanStatus.COMPLETED if result.success else ScanStatus.FAILED,
-    )
-
     # Save artifact and execution logs on disk
     import aiofiles
     from pathlib import Path
     cfg = _get_config()
     session_dir = Path(cfg.sessions_dir) / session.id
     
-    # Save raw stdout artifact
     ext = _get_artifact_extension(normalized_tool_name)
     raw_path = session_dir / "artifacts" / f"{normalized_tool_name}_{scan.id}_raw.{ext}"
-    raw_file_str = ""
+    log_path = session_dir / "scans" / f"{normalized_tool_name}_{scan.id}.log"
+    stderr_path = raw_path.with_suffix(".err")
+
     try:
         raw_path.parent.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(raw_path, "w", encoding="utf-8") as f:
-            await f.write(result.raw_output)
-        raw_file_str = str(raw_path.resolve())
+        log_path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        logger.error("Failed to write raw artifact for %s: %s", scan.id, e)
+        logger.error("Failed to create session directories: %s", e)
+
+    result = await _get_executor().execute(
+        tool,
+        input_data,
+        timeout=timeout,
+        target=cleaned_target or None,
+        stdout_path=str(raw_path),
+        stderr_path=str(stderr_path),
+    )
+    
+    await _record_tool_result(session.id, scan.id, normalized_tool_name, result)
+    await _get_db().update_scan_status(
+        scan.id,
+        ScanStatus.COMPLETED if result.success else ScanStatus.FAILED,
+    )
+
+    raw_file_str = str(raw_path.resolve())
 
     # Save log file
-    log_path = session_dir / "scans" / f"{normalized_tool_name}_{scan.id}.log"
     log_content = (
         f"Command: {result.command}\n"
         f"Started At: {result.started_at}\n"
         f"Completed At: {result.completed_at}\n"
         f"Return Code: {result.return_code}\n"
         f"Execution Time: {result.execution_time:.2f}s\n\n"
-        f"--- STDOUT ---\n{result.raw_output}\n\n"
+        f"--- STDOUT ---\n[Output written directly to {raw_file_str}]\n\n"
         f"--- STDERR ---\n{result.error}\n"
     )
     try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(log_path, "w", encoding="utf-8") as f:
             await f.write(log_content)
     except Exception as e:
         logger.error("Failed to write scan log for %s: %s", scan.id, e)
+
+    # Clean up temporary stderr file
+    try:
+        if stderr_path.exists():
+            stderr_path.unlink()
+    except Exception:
+        pass
 
     # Update parsed_data with the raw artifact path
     if isinstance(result.parsed_data, dict):
@@ -697,6 +706,14 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
 
     _db = Database(_config.db_path)
     await _db.init()
+
+    # Recovery: update any orphaned scans from 'running' to 'failed'
+    try:
+        await _db.conn.execute("UPDATE scans SET status = 'failed' WHERE status = 'running'")
+        await _db.conn.commit()
+        logger.info("Database recovery: updated orphaned running scans to failed")
+    except Exception as e:
+        logger.error("Failed to recover database status: %s", e)
 
     _scope_manager = ScopeManager()
     _registry = ToolRegistry()

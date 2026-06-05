@@ -1,0 +1,66 @@
+name: Vajra MCP CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .
+        pip install psutil aiofiles pytest ruff
+
+    - name: Lint code
+      run: |
+        # Run ruff check for fast linting
+        ruff check src/
+
+    - name: Run test suite
+      run: |
+        python -m unittest discover tests
+
+  build-release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install build tool
+      run: |
+        python -m pip install --upgrade pip
+        pip install build hatchling
+
+    - name: Build wheel and sdist
+      run: |
+        python -m build
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-dist
+        path: dist/

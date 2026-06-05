@@ -1,6 +1,8 @@
 """Input sanitization and validation for targets and command arguments."""
 
 import ipaddress
+import os
+from pathlib import Path
 import re
 import shlex
 from urllib.parse import urlparse
@@ -85,6 +87,80 @@ def validate_url(url: str) -> bool:
         return False
 
 
+def validate_wordlist_path(path_str: str) -> str:
+    """Validate that the wordlist path is safe and restricted to allowed directories.
+
+    Allowed locations:
+      - The project workspace (root) directory
+      - The configured default wordlist directory
+      - Explicitly allowed paths from environment (CYBERMCP_ALLOWED_WORDLIST_PATHS)
+
+    Rejects absolute system paths outside allowed locations, path traversal, and symlink escapes.
+    """
+    if not path_str:
+        raise ValueError("Wordlist path cannot be empty")
+
+    path = Path(path_str)
+
+    # Reject path traversal attempts
+    if any(part == ".." for part in path.parts):
+        raise ValueError(f"Path traversal detected in wordlist path: {path_str}")
+
+    from cybermcp.config import get_config
+    cfg = get_config()
+
+    # Resolve project root
+    project_root = Path(cfg.db_path).parent.parent.resolve()
+
+    # Get absolute resolved path
+    resolved_path = path.resolve()
+
+    # Verify symlink escapes
+    try:
+        if path.exists() and path.is_symlink():
+            link_target = Path(os.readlink(path)).resolve()
+        else:
+            link_target = resolved_path
+    except Exception:
+        link_target = resolved_path
+
+    # Define allowed directories
+    allowed_dirs = [project_root, Path.cwd().resolve()]
+
+    if cfg.default_wordlist:
+        dw_path = Path(cfg.default_wordlist).resolve()
+        if dw_path.is_file():
+            allowed_dirs.append(dw_path.parent)
+        elif dw_path.is_dir():
+            allowed_dirs.append(dw_path)
+
+    allowed_paths_env = os.environ.get("CYBERMCP_ALLOWED_WORDLIST_PATHS", "")
+    if allowed_paths_env:
+        for p in allowed_paths_env.split(os.pathsep):
+            p = p.strip()
+            if p:
+                allowed_dirs.append(Path(p).resolve())
+
+    # Helper function to check containment
+    def is_inside(target: Path, parent: Path) -> bool:
+        try:
+            target.relative_to(parent)
+            return True
+        except ValueError:
+            return False
+
+    is_safe = False
+    for allowed in allowed_dirs:
+        if is_inside(resolved_path, allowed) and is_inside(link_target, allowed):
+            is_safe = True
+            break
+
+    if not is_safe:
+        raise ValueError(f"Wordlist path '{path_str}' is outside allowed locations.")
+
+    return path_str
+
+
 __all__ = [
     "sanitize_target",
     "sanitize_command_arg",
@@ -92,4 +168,5 @@ __all__ = [
     "validate_domain",
     "validate_cidr",
     "validate_url",
+    "validate_wordlist_path",
 ]

@@ -41,6 +41,8 @@ class NmapTool(BaseTool):
     tags = ["port-scan", "service-detection", "network", "recon"]
     input_model = NmapInput
 
+    docker_capable = True
+
     _scan_type_flags: dict[ScanType, list[str]] = {
         ScanType.SYN: ["-sS"],
         ScanType.CONNECT: ["-sT"],
@@ -67,141 +69,163 @@ class NmapTool(BaseTool):
         cmd.append(input_model.target)
         return cmd
 
-    def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
-        if return_code != 0 and not stdout.strip():
-            return ToolResult(
-                tool_name=self.name,
-                success=False,
-                raw_output=stderr or stdout,
-                error=f"Nmap exited with code {return_code}: {stderr.strip()}",
-            )
-
+    def _parse_xml_incremental(self, file_path: str) -> tuple[list[dict[str, Any]], list[Finding]]:
         hosts: list[dict[str, Any]] = []
         findings: list[Finding] = []
-
+        
         try:
-            root = ET.fromstring(stdout)
+            context = ET.iterparse(file_path, events=("start", "end"))
+        except Exception:
+            return hosts, findings
+            
+        current_host: dict[str, Any] = {}
+        current_port: dict[str, Any] = {}
+        
+        try:
+            for event, elem in context:
+                if event == "start":
+                    if elem.tag == "host":
+                        current_host = {
+                            "ip": "",
+                            "addr_type": "",
+                            "state": "",
+                            "hostnames": [],
+                            "os_matches": [],
+                            "ports": []
+                        }
+                    elif elem.tag == "port":
+                        current_port = {
+                            "port": int(elem.get("portid", 0)),
+                            "protocol": elem.get("protocol", "tcp"),
+                            "state": "",
+                            "reason": "",
+                            "service": "",
+                            "product": "",
+                            "version": "",
+                            "extra_info": "",
+                            "scripts": []
+                        }
+                elif event == "end":
+                    if elem.tag == "address" and current_host:
+                        current_host["ip"] = elem.get("addr", "")
+                        current_host["addr_type"] = elem.get("addrtype", "")
+                    elif elem.tag == "status" and current_host:
+                        current_host["state"] = elem.get("state", "")
+                    elif elem.tag == "hostname" and current_host:
+                        name = elem.get("name")
+                        if name:
+                            current_host["hostnames"].append(name)
+                    elif elem.tag == "osmatch" and current_host:
+                        current_host["os_matches"].append({
+                            "name": osmatch.get("name", "") if (osmatch := elem) is not None else "",
+                            "accuracy": osmatch.get("accuracy", "") if (osmatch := elem) is not None else "",
+                        })
+                    elif elem.tag == "state" and current_port:
+                        current_port["state"] = elem.get("state", "")
+                        current_port["reason"] = elem.get("reason", "")
+                    elif elem.tag == "service" and current_port:
+                        current_port["service"] = elem.get("name", "")
+                        current_port["product"] = elem.get("product", "")
+                        current_port["version"] = elem.get("version", "")
+                        current_port["extra_info"] = elem.get("extrainfo", "")
+                    elif elem.tag == "script" and current_port:
+                        current_port["scripts"].append({
+                            "id": elem.get("id", ""),
+                            "output": elem.get("output", "")
+                        })
+                    elif elem.tag == "port" and current_host and current_port:
+                        current_host["ports"].append(current_port)
+                        if current_port.get("state") == "open":
+                            svc_name = current_port.get("service", "unknown")
+                            product = current_port.get("product", "")
+                            version = current_port.get("version", "")
+                            desc_parts = [f"Port {current_port['port']}/{current_port['protocol']} is open"]
+                            if svc_name:
+                                desc_parts.append(f"running {svc_name}")
+                            if product:
+                                desc_parts.append(f"({product} {version})".strip())
+                            findings.append(Finding(
+                                title=f"Open port {current_port['port']}/{current_port['protocol']}",
+                                severity=Severity.INFO,
+                                description=" ".join(desc_parts),
+                                evidence=f"Service: {svc_name}, Product: {product} {version}".strip(),
+                                affected_asset=current_host.get("ip", ""),
+                            ))
+                        for sr in current_port.get("scripts", []):
+                            if any(kw in sr["id"].lower() for kw in ("vuln", "exploit", "cve")):
+                                cve_ids = re.findall(r"CVE-\d{4}-\d+", sr["output"])
+                                findings.append(Finding(
+                                    title=f"NSE {sr['id']} finding on port {current_port['port']}",
+                                    severity=Severity.MEDIUM,
+                                    description=sr["output"][:500],
+                                    evidence=sr["output"],
+                                    cve_ids=cve_ids,
+                                    affected_asset=current_host.get("ip", ""),
+                                ))
+                        current_port = {}
+                    elif elem.tag == "host":
+                        hosts.append(current_host)
+                        current_host = {}
+                    elem.clear()
         except ET.ParseError:
-            return ToolResult(
-                tool_name=self.name,
-                success=False,
-                raw_output=stdout,
-                error="Failed to parse nmap XML output",
-            )
+            # Incremental recovery of truncated XML
+            if current_host and current_host.get("ip") and current_host not in hosts:
+                hosts.append(current_host)
+        except Exception:
+            pass
+            
+        return hosts, findings
 
-        for host_el in root.findall(".//host"):
-            host_data: dict[str, Any] = {}
-            addr_el = host_el.find("address")
-            if addr_el is not None:
-                host_data["ip"] = addr_el.get("addr", "")
-                host_data["addr_type"] = addr_el.get("addrtype", "")
-
-            status_el = host_el.find("status")
-            if status_el is not None:
-                host_data["state"] = status_el.get("state", "")
-
-            hostnames: list[str] = []
-            for hn in host_el.findall(".//hostname"):
-                name = hn.get("name")
-                if name:
-                    hostnames.append(name)
-            host_data["hostnames"] = hostnames
-
-            os_matches: list[dict[str, str]] = []
-            for osmatch in host_el.findall(".//osmatch"):
-                os_matches.append({
-                    "name": osmatch.get("name", ""),
-                    "accuracy": osmatch.get("accuracy", ""),
-                })
-            host_data["os_matches"] = os_matches
-
-            ports: list[dict[str, Any]] = []
-            for port_el in host_el.findall(".//port"):
-                port_info: dict[str, Any] = {
-                    "port": int(port_el.get("portid", 0)),
-                    "protocol": port_el.get("protocol", "tcp"),
-                }
-                state_el = port_el.find("state")
-                if state_el is not None:
-                    port_info["state"] = state_el.get("state", "")
-                    port_info["reason"] = state_el.get("reason", "")
-
-                svc_el = port_el.find("service")
-                if svc_el is not None:
-                    port_info["service"] = svc_el.get("name", "")
-                    port_info["product"] = svc_el.get("product", "")
-                    port_info["version"] = svc_el.get("version", "")
-                    port_info["extra_info"] = svc_el.get("extrainfo", "")
-
-                script_results: list[dict[str, str]] = []
-                for script_el in port_el.findall("script"):
-                    script_results.append({
-                        "id": script_el.get("id", ""),
-                        "output": script_el.get("output", ""),
-                    })
-                port_info["scripts"] = script_results
-                ports.append(port_info)
-
-                if port_info.get("state") == "open":
-                    svc_name = port_info.get("service", "unknown")
-                    product = port_info.get("product", "")
-                    version = port_info.get("version", "")
-                    desc_parts = [f"Port {port_info['port']}/{port_info['protocol']} is open"]
-                    if svc_name:
-                        desc_parts.append(f"running {svc_name}")
-                    if product:
-                        desc_parts.append(f"({product} {version})".strip())
-                    findings.append(Finding(
-                        title=f"Open port {port_info['port']}/{port_info['protocol']}",
-                        severity=Severity.INFO,
-                        description=" ".join(desc_parts),
-                        evidence=f"Service: {svc_name}, Product: {product} {version}".strip(),
-                        affected_asset=host_data.get("ip", ""),
-                    ))
-
-                for sr in script_results:
-                    if any(kw in sr["id"].lower() for kw in ("vuln", "exploit", "cve")):
-                        cve_ids = re.findall(r"CVE-\d{4}-\d+", sr["output"])
-                        findings.append(Finding(
-                            title=f"NSE {sr['id']} finding on port {port_info['port']}",
-                            severity=Severity.MEDIUM,
-                            description=sr["output"][:500],
-                            evidence=sr["output"],
-                            cve_ids=cve_ids,
-                            affected_asset=host_data.get("ip", ""),
-                        ))
-
-            host_data["ports"] = ports
-            hosts.append(host_data)
-
-        run_stats = {}
-        stats_el = root.find(".//runstats/finished")
-        if stats_el is not None:
-            run_stats["elapsed"] = stats_el.get("elapsed", "")
-            run_stats["exit"] = stats_el.get("exit", "")
-        hosts_stat = root.find(".//runstats/hosts")
-        if hosts_stat is not None:
-            run_stats["hosts_up"] = hosts_stat.get("up", "0")
-            run_stats["hosts_down"] = hosts_stat.get("down", "0")
-            run_stats["hosts_total"] = hosts_stat.get("total", "0")
-
+    def parse_output_file(
+        self,
+        stdout_path: str,
+        stderr_path: str,
+        return_code: int,
+        complete: bool = True
+    ) -> ToolResult:
+        hosts, findings = self._parse_xml_incremental(stdout_path)
+        
         target_extracted = ""
         if hosts:
             target_extracted = hosts[0].get("ip", "") or (hosts[0].get("hostnames")[0] if hosts[0].get("hostnames") else "")
 
+        success = complete and return_code == 0
+        if not complete or not success:
+            success = bool(findings)
+
+        parsed_data = {
+            "tool": self.name,
+            "target": target_extracted,
+            "findings": [f.model_dump() for f in findings],
+            "metadata": {"hosts": hosts, "run_stats": {}},
+            "raw_file": "",
+        }
+        if not complete:
+            parsed_data["partial"] = True
+            
         return ToolResult(
             tool_name=self.name,
-            success=True,
-            raw_output=stdout,
-            parsed_data={
-                "tool": self.name,
-                "target": target_extracted,
-                "findings": [f.model_dump() for f in findings],
-                "metadata": {"hosts": hosts, "run_stats": run_stats},
-                "raw_file": "",
-            },
+            success=success,
+            raw_output="",
+            parsed_data=parsed_data,
             findings=findings,
+            error="" if success else "Truncated or crashed scan",
         )
+
+    def parse_output(self, stdout: str, stderr: str, return_code: int) -> ToolResult:
+        import tempfile
+        import os
+        fd, path = tempfile.mkstemp()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(stdout)
+            os.close(fd)
+            return self.parse_output_file(path, "", return_code)
+        finally:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
 
 
 TOOLS = [NmapTool()]

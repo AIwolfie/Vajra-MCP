@@ -1,28 +1,28 @@
 # Vajra MCP
 
-Vajra MCP is a Model Context Protocol (MCP) server that connects Claude Code and other MCP-compatible clients to real-world cybersecurity tools through a secure, structured execution layer.
+Vajra MCP is a Model Context Protocol (MCP) server that connects Claude Code and other MCP-compatible clients to security tools through a structured execution layer.
 
-Vajra MCP acts as a precise, resilient orchestrator that executes command-line security scanners, validates scanning targets against strict scope boundaries, monitors resource limits, recovers partial results during timeouts or crashes, and returns fully structured JSON payloads to the LLM.
-
----
-
-## 🚀 Features
-
-* **MCP-Native Architecture**: Built directly on the official Model Context Protocol, exposing structured security tools and workflows to LLMs.
-* **Claude Code Integration**: Designed to serve as the local execution engine for Claude Code during penetration testing and bug bounty sweeps.
-* **Structured JSON Outputs**: Converts messy terminal stdout/stderr lines from CLI security tools into normalized, Pydantic-validated JSON schemas.
-* **Scope Enforcement**: Enforces target validation at the entrypoint, checking IP ranges, CIDR blocks, hostnames, and domain wildcards before invoking tools.
-* **Session Persistence**: Saves all execution details, scan history, raw logs, and findings in a local SQLite database and organized directories.
-* **HTML Reporting**: Generates sleek, interactive, single-file HTML reports detailing CVSS distribution, vulnerability cards, and activity timelines.
-* **Artifact Storage**: Automatically isolates raw outputs, screenshots, and logs in dedicated per-session folders.
-* **Docker Execution Backend**: Supports running compatible tools inside isolated Alpine/Debian Docker containers, translating local paths to mount volumes.
-* **Recovery & Partial Result Parsing**: Leverages async chunked file streams to recover results generated prior to timeouts, crashes, or limit terminations (e.g. truncated Nmap XML recovery).
-* **Tool Health Diagnostics**: Integrated `doctor` CLI diagnostic system mapping path status, versions, and missing API keys.
-* **Resource Limits**: Restricts memory usage (RSS limit checks via `psutil`) and log sizes to prevent system resource exhaustion.
+Vajra MCP executes command-line security scanners, validates scanning targets against scope boundaries, monitors resource limits, recovers partial results during timeouts or crashes, and returns structured JSON payloads to the client.
 
 ---
 
-## 📐 Architecture
+## Features
+
+* **MCP-Native Architecture**: Integrates with the Model Context Protocol, exposing security tools and workflows to MCP clients.
+* **Claude Code Integration**: Acts as a local execution engine for Claude Code during security testing workflows.
+* **Structured JSON Outputs**: Parses stdout/stderr lines from CLI security tools into normalized JSON schemas.
+* **Scope Enforcement**: Enforces target validation (IPs, CIDRs, domains) before tool execution.
+* **Session Persistence**: Saves execution details, scan history, raw logs, and findings in a local SQLite database.
+* **HTML Reporting**: Generates interactive HTML reports detailing CVSS distribution, vulnerability cards, and activity timelines.
+* **Artifact Storage**: Isolates raw outputs, screenshots, and logs in per-session folders.
+* **Docker Execution Backend**: Supports running compatible tools inside isolated Docker containers, translating local paths to mount volumes.
+* **Recovery & Partial Result Parsing**: Uses async chunked file streams to recover results generated prior to timeouts, crashes, or limit terminations.
+* **Tool Health Diagnostics**: Diagnostic interface (`doctor` command) checking path status, versions, and missing API keys.
+* **Resource Limits**: Restricts memory usage (RSS checks via `psutil`) and log sizes to prevent system resource exhaustion.
+
+---
+
+## Architecture
 
 ```mermaid
 graph TD
@@ -63,7 +63,7 @@ graph TD
 
 ---
 
-## 🛠 Supported Tools
+## Supported Tools
 
 | Category | Tool | Docker Image | Status | Fallback Behavior |
 | :--- | :--- | :--- | :--- | :--- |
@@ -85,33 +85,27 @@ graph TD
 
 ---
 
-## 📥 Installation
+## Installation
 
-### Basic Core Installation
-Installs the core MCP server framework, SQLite manager, diagnostics, and native subprocess runner:
+### Development Installation
+Vajra MCP is not published on PyPI. Clone the repository and install in editable mode:
 ```bash
-pip install vajra-mcp
-```
-
-### Development / Editable Installation
-Clone the repository and install in editable mode with testing dependencies:
-```bash
-git clone https://github.com/project/Vajra-MCP.git
+git clone https://github.com/AIwolfie/Vajra-MCP.git
 cd Vajra-MCP
 pip install -e .
 ```
 
-### PDF Report Support
-To enable compiled HTML-to-PDF reports, install the `pdf` extra (requires local Cairo, Pango, and GObject libraries installed on your operating system):
+### Optional PDF Report Support
+To enable PDF report generation (requires Cairo, Pango, and GObject libraries installed on your host system):
 ```bash
-pip install "vajra-mcp[pdf]"
+pip install -e ".[pdf]"
 ```
 
 ---
 
-## 🤖 Claude Code Integration
+## Claude Code Integration
 
-Vajra MCP integrates directly with Claude Code. You can issue security workflows natively in natural language:
+Vajra MCP integrates with Claude Code. Example prompts for the client:
 
 ### 1. Run Reconnaissance
 > "Set the scope to example.com and run auto_recon. Enumerate subdomains, filter active hosts, scan ports, and generate an HTML report."
@@ -127,9 +121,9 @@ Vajra MCP integrates directly with Claude Code. You can issue security workflows
 
 ---
 
-## 🔌 MCP Tool Reference
+## MCP Tool Reference
 
-Vajra MCP exposes several tools directly to the client:
+Vajra MCP exposes the following tools:
 
 ### `set_scope`
 Defines the target boundary for the active assessment.
@@ -143,7 +137,7 @@ Defines the target boundary for the active assessment.
   ```
 
 ### `list_tools`
-Lists all supported pentesting tools and their installation status.
+Lists supported tools and their installation status.
 * **Payload**:
   ```json
   {
@@ -167,7 +161,7 @@ Executes a single security tool within scope.
   ```
 
 ### `auto_recon`
-Automates a passive and active subdomain profiling pipeline.
+Automates subdomain profiling and service discovery.
 * **Payload**:
   ```json
   {
@@ -179,7 +173,7 @@ Automates a passive and active subdomain profiling pipeline.
   ```
 
 ### `web_audit`
-Automates vulnerability fuzzing and scanning targeting a web target.
+Automates vulnerability fuzzing and web scanning.
 * **Payload**:
   ```json
   {
@@ -199,7 +193,7 @@ Generates a consolidated HTML report from the database.
   ```
 
 ### `get_session`
-Retrieves execution status, scan history, and findings.
+Retrieves scan history and findings.
 * **Payload**:
   ```json
   {
@@ -209,19 +203,17 @@ Retrieves execution status, scan history, and findings.
 
 ---
 
-## 🔒 Security Model
-
-Vajra MCP is built for offensive-security professionals and maintains strict runtime guardrails:
+## Security Model
 
 * **Scope Enforcement**: All tools check the target destination before execution. If a target resolves outside allowed scopes or matches an exclusion pattern, the executor blocks execution.
-* **Wordlist Restriction**: To prevent path traversal attacks in remote setups, all wordlists must reside inside the workspace directory, the configured default directory, or explicitly whitelisted paths in `CYBERMCP_ALLOWED_WORDLIST_PATHS`. Traversal sequences (`..`) and symlinks escaping the project folder root are strictly blocked.
+* **Wordlist Restriction**: To prevent path traversal attacks in remote setups, all wordlists must reside inside the workspace directory, the configured default directory, or explicitly whitelisted paths in `CYBERMCP_ALLOWED_WORDLIST_PATHS`. Traversal sequences (`..`) and symlinks escaping the project folder root are blocked.
 * **Docker Isolation Mode**: Restricts binary execution to Docker containers mapping the project workspace to `/workspace`. Limits memory sizes via `--memory` limits.
 * **Resource Limits**: Best-effort `psutil` parent/child RSS memory audits and file-writer byte counts prevent scan utilities from consuming more than `max_memory_mb` or writing more than `max_output_mb`.
 * **Artifact Isolation**: Scan logs and raw outputs are written to private `/sessions/<session-id>/` subdirectories.
 
 ---
 
-## 🔄 Example Workflow
+## Example Workflow
 
 ```mermaid
 sequenceDiagram
@@ -249,20 +241,7 @@ sequenceDiagram
 
 ---
 
-## 📸 Screenshots
-
-### Tool Diagnostics (`doctor` CLI)
-![Tool diagnostics console output](assets/diagnostics.png)
-
-### HTML Reports
-![Interactive HTML report dashboard](assets/report.png)
-
-### Claude Code Workflow
-![Claude Code terminal interaction](assets/workflow.png)
-
----
-
-## 📊 Project Status
+## Project Status
 
 * **Current Version**: `v1.0.0-rc1`
 * **Test Status**: `37 tests passing` (100% success rate)
@@ -270,7 +249,7 @@ sequenceDiagram
 
 ---
 
-## 🗺 Roadmap
+## Roadmap
 
 * **Phase 5 (Next)**: Real-time stream parsing utilizing async generator chunk streams instead of loading entire logs into memory.
 * **Phase 6**: Expose a SSE progress channel to stream findings live to Claude Code during long-running scans.
@@ -278,6 +257,6 @@ sequenceDiagram
 
 ---
 
-## 📄 License
+## License
 
 Vajra MCP is open-source software licensed under the [MIT License](LICENSE).

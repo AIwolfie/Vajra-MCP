@@ -38,6 +38,7 @@ class WorkflowTest(unittest.IsolatedAsyncioTestCase):
 
         server_module._db = self._db
         server_module._config = get_config()
+        server_module._config.execution_mode = "native"
         server_module._registry = ToolRegistry()
         server_module._registry.clear()
         server_module._registry.auto_discover()

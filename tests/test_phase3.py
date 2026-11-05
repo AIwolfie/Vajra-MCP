@@ -300,7 +300,7 @@ class WordlistValidationTest(unittest.TestCase):
     def test_validate_wordlist_path_explicitly_allowed(self) -> None:
         from cybermcp.utils.sanitizer import validate_wordlist_path
         # Allow via environment variable CYBERMCP_ALLOWED_WORDLIST_PATHS
-        allowed_path = "/tmp" if os.name != "nt" else "C:/Temp"
+        allowed_path = tempfile.gettempdir()
         os.environ["CYBERMCP_ALLOWED_WORDLIST_PATHS"] = allowed_path
         try:
             # Let's test a path inside the allowed temp path

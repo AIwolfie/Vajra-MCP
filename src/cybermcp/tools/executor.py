@@ -8,6 +8,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from pydantic import BaseModel
 
@@ -171,7 +172,8 @@ class ToolExecutor:
         if is_docker:
             # Map native paths to docker /workspace volume mount points
             # Assumes project root is mounted into docker
-            project_root = str(cfg.db_path).replace("\\", "/").rsplit("/data/", 1)[0]
+            db_norm = str(cfg.db_path).replace("\\", "/")
+            project_root = db_norm.rsplit("/data/", 1)[0] if "/data/" in db_norm else str(Path(cfg.db_path).parent.resolve()).replace("\\", "/")
             docker_cmd = [
                 "docker", "run", "--rm",
                 "-v", f"{project_root}:/workspace",

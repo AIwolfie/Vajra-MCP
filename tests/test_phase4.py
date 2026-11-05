@@ -37,6 +37,11 @@ class Phase4HardeningTest(unittest.IsolatedAsyncioTestCase):
         self.cfg.max_memory_mb = 128
         self.cfg.execution_mode = "native"
 
+    def tearDown(self) -> None:
+        self.cfg.execution_mode = "native"
+        self.cfg.max_output_mb = 10
+        self.cfg.max_memory_mb = 512
+
     async def test_path_translation_for_docker(self) -> None:
         executor = ToolExecutor()
         tool = NucleiTool()

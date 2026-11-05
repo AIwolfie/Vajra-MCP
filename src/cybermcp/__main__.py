@@ -18,8 +18,7 @@ def _requires_http_auth(transport: str, host: str, allow_localhost: bool) -> boo
 def main() -> None:
     cfg = get_config()
     
-    import sys as py_sys
-    if len(py_sys.argv) > 1 and py_sys.argv[1].lower() == "doctor":
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "doctor":
         import asyncio
         from cybermcp.tools.health import diagnostics
         from rich.console import Console
@@ -62,7 +61,7 @@ def main() -> None:
         else:
             console.print("\n[bold green]All priority tools are installed and ready to use![/bold green]")
         
-        py_ver = f"{py_sys.version_info.major}.{py_sys.version_info.minor}.{py_sys.version_info.micro}"
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         console.print("\n[bold blue]System Information:[/bold blue]")
         console.print(f"• Python version: {py_ver}")
         console.print(f"• Database Path: {cfg.db_path}")
@@ -70,16 +69,16 @@ def main() -> None:
         console.print(f"• Reports Directory: {cfg.reports_dir}")
         return
 
-    if len(py_sys.argv) > 1 and py_sys.argv[1].lower() == "config":
-        subcmd = py_sys.argv[2].lower() if len(py_sys.argv) > 2 else "list"
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "config":
+        subcmd = sys.argv[2].lower() if len(sys.argv) > 2 else "list"
         env_path = Path(".env")
         if subcmd == "set-key":
-            if len(py_sys.argv) < 5:
+            if len(sys.argv) < 5:
                 print("Usage: vajra-mcp config set-key <KEY_NAME> <VALUE>")
                 print("Example: vajra-mcp config set-key shodan_api_key abc123xyz")
                 sys.exit(1)
-            raw_key = py_sys.argv[3].strip()
-            val = py_sys.argv[4].strip()
+            raw_key = sys.argv[3].strip()
+            val = sys.argv[4].strip()
             env_key = raw_key.upper()
             if not env_key.startswith("CYBERMCP_"):
                 env_key = f"CYBERMCP_{env_key}"

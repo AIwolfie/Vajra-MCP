@@ -36,12 +36,5 @@ jobs:
 
     - name: Run test suite
       run: |
-        python -c "import sys, traceback; sys.path.insert(0, 'src');
-try:
-    import cybermcp.server
-    print('SERVER IMPORT OK')
-except Exception:
-    tb = traceback.format_exc().replace('\n', '%0A')
-    print(f'::error title=ServerImportError::{tb}')
-    sys.exit(1)"
+        python debug_import.py
         python -m unittest discover tests -v

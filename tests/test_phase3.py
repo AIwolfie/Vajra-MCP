@@ -338,5 +338,29 @@ class WordlistValidationTest(unittest.TestCase):
             FeroxbusterInput(url="http://example.com", wordlist="/etc/passwd" if os.name != "nt" else "C:/Windows/win.ini")
 
 
+class HealthAndCliImprovementsTest(unittest.TestCase):
+    def test_localhost_sse_auth_not_required(self) -> None:
+        from cybermcp.__main__ import _requires_http_auth
+        self.assertFalse(_requires_http_auth("sse", "127.0.0.1", True))
+        self.assertFalse(_requires_http_auth("sse", "localhost", True))
+        self.assertFalse(_requires_http_auth("sse", "::1", True))
+        self.assertTrue(_requires_http_auth("sse", "0.0.0.0", True))
+        self.assertTrue(_requires_http_auth("sse", "127.0.0.1", False))
+
+    def test_version_parser_strips_ansi_and_extracts_semver(self) -> None:
+        from cybermcp.tools.health import _detect_version
+
+        async def _run() -> None:
+            with patch("asyncio.create_subprocess_exec") as mock_exec:
+                proc_mock = AsyncMock()
+                banner = "\x1b[34m[INF]\x1b[0m Current subfinder version v2.6.6\n".encode("utf-8")
+                proc_mock.communicate.return_value = (banner, b"")
+                mock_exec.return_value = proc_mock
+                version = await _detect_version("subfinder", "subfinder")
+                self.assertEqual(version, "2.6.6")
+
+        asyncio.run(_run())
+
+
 if __name__ == "__main__":
     unittest.main()

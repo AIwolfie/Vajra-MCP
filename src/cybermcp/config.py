@@ -29,7 +29,7 @@ class VajraMCPConfig(BaseSettings):
 
     # HTTP/SSE authentication
     http_api_key: str = ""
-    allow_localhost_no_auth: bool = False
+    allow_localhost_no_auth: bool = True
 
     # Storage
     db_path: str = Field(default_factory=lambda: str(_PROJECT_ROOT / "data" / "vajra-mcp.db"))
@@ -67,6 +67,7 @@ class VajraMCPConfig(BaseSettings):
     censys_api_secret: str = ""
     virustotal_api_key: str = ""
     hunter_api_key: str = ""
+    wpscan_api_token: str = ""
 
     # Tool path overrides — tool_name -> absolute path to binary
     tool_paths: dict[str, str] = Field(default_factory=dict)

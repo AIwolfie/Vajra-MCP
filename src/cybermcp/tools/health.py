@@ -30,22 +30,24 @@ _INSTALL_COMMANDS = {
     "testssl": "git clone --depth 1 https://github.com/drwetter/testssl.sh.git",
 }
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
 _VERSION_SPECS = {
-    "nmap": (["--version"], r"Nmap version ([0-9.]+)"),
-    "subfinder": (["-version"], r"([0-9\.]+)"),
-    "amass": (["-version"], r"([0-9\.]+)"),
-    "assetfinder": (["--version"], r"([0-9\.]+)"),
-    "httpx": (["-version"], r"([0-9\.]+)"),
-    "katana": (["-version"], r"([0-9\.]+)"),
-    "wafw00f": (["--version"], r"WAFW00F version ([0-9.]+)"),
-    "whatweb": (["--version"], r"WhatWeb version ([0-9.]+)"),
-    "nuclei": (["-version"], r"([0-9\.]+)"),
-    "ffuf": (["-V"], r"([0-9\.]+|[0-9\.]+-\S+)"),
-    "feroxbuster": (["-V"], r"feroxbuster ([0-9.]+)"),
-    "dalfox": (["version"], r"dalfox v([0-9.]+)"),
+    "nmap": (["--version"], r"Nmap\s+version\s+([0-9.]+)"),
+    "subfinder": (["-version"], r"(?:version\s*[:v]?\s*|\bv?)([0-9]+\.[0-9]+(?:\.[0-9]+)?)"),
+    "amass": (["-version"], r"\bv?([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b"),
+    "assetfinder": (["--version"], r"\bv?([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b"),
+    "httpx": (["-version"], r"(?:version\s*[:v]?\s*|\bv?)([0-9]+\.[0-9]+(?:\.[0-9]+)?)"),
+    "katana": (["-version"], r"(?:version\s*[:v]?\s*|\bv?)([0-9]+\.[0-9]+(?:\.[0-9]+)?)"),
+    "wafw00f": (["--version"], r"WAFW00F\s*(?:version)?\s*v?([0-9.]+)"),
+    "whatweb": (["--version"], r"WhatWeb\s*(?:version)?\s*v?([0-9.]+)"),
+    "nuclei": (["-version"], r"(?:version\s*[:v]?\s*|\bv?)([0-9]+\.[0-9]+(?:\.[0-9]+)?)"),
+    "ffuf": (["-V"], r"([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-\S+)?)"),
+    "feroxbuster": (["-V"], r"feroxbuster\s+v?([0-9.]+)"),
+    "dalfox": (["version"], r"dalfox\s+v?([0-9.]+)"),
     "sqlmap": (["--version"], r"([0-9.]+#\S+|[0-9.]+)"),
-    "wpscan": (["--version"], r"Version ([0-9.]+)"),
-    "testssl": (["--version"], r"testssl.sh\s+(\S+)"),
+    "wpscan": (["--version"], r"Version\s+([0-9.]+)"),
+    "testssl": (["--version"], r"testssl\.sh\s+v?(\S+)"),
 }
 
 
@@ -65,10 +67,13 @@ async def _detect_version(binary_path: str, tool_name: str) -> str:
         )
         stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=3.0)
         output = (stdout_bytes + stderr_bytes).decode("utf-8", errors="replace")
+        clean_output = _ANSI_ESCAPE_RE.sub("", output)
 
-        match = re.search(pattern, output, re.IGNORECASE)
+        match = re.search(pattern, clean_output, re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            v = match.group(1).strip()
+            if re.search(r"\d", v) and v != ".":
+                return v
     except Exception:
         pass
     return "unknown"
@@ -110,8 +115,12 @@ async def health_check(tool_name: str) -> dict[str, Any]:
             "censys_api_id": bool(cfg.censys_api_id),
         }
     elif tool_name == "wpscan":
+        wpscan_token = bool(
+            getattr(cfg, "wpscan_api_token", None)
+            or Path("~/.wpscan/config.yml").expanduser().exists()
+        )
         api_keys = {
-            "wpscan_api_token": bool(getattr(cfg, "wpscan_api_token", None) or Path("~/.wpscan/config.yml").expanduser().exists()),
+            "wpscan_api_token": wpscan_token,
         }
 
     return {

@@ -130,33 +130,47 @@ Verify which third-party security scanners (e.g. Nmap, Nuclei, Sqlmap) are avail
 vajra-mcp doctor
 ```
 
-### 2. Configure and Run the Server
+### 2. Configure Third-Party API Keys
+For passive OSINT tools (Subfinder, Amass, WPScan) to discover deeper results, configure your threat intel API keys directly via the CLI:
+```bash
+# Save an API key directly into your environment configuration
+vajra-mcp config set-key shodan_api_key YOUR_SHODAN_KEY
+vajra-mcp config set-key virustotal_api_key YOUR_VT_KEY
+vajra-mcp config set-key censys_api_id YOUR_CENSYS_ID
+vajra-mcp config set-key censys_api_secret YOUR_CENSYS_SECRET
+vajra-mcp config set-key wpscan_api_token YOUR_WPSCAN_TOKEN
+
+# Review configured keys and status
+vajra-mcp config list
+```
+
+### 3. Configure and Run the Server
 
 #### Method A: stdio Transport (For Claude Code Integration)
-To register Vajra MCP with your local Claude Code client, execute:
+To register Vajra MCP with your local Claude Code client, execute (use `--` before arguments to prevent option collisions):
 
 * **Global Installation**:
   ```bash
-  claude mcp add vajra-mcp vajra-mcp
+  claude mcp add vajra-mcp -- vajra-mcp
   ```
 * **Virtual Environment Installation**:
   ```bash
-  claude mcp add vajra-mcp /path/to/Vajra-MCP/venv/bin/vajra-mcp
+  claude mcp add vajra-mcp -- /path/to/Vajra-MCP/venv/bin/vajra-mcp
   ```
 
 #### Method B: SSE/HTTP Transport (For Networked Clients)
-Running over SSE requires setting a secure HTTP API key or explicitly bypassing authentication for localhost:
+Running over SSE defaults to allowing unauthenticated connections when bound to localhost:
 
-* **With Authentication (Recommended)**:
+* **Localhost (Default)**:
+  ```bash
+  vajra-mcp --transport sse --host 127.0.0.1 --port 8394
+  ```
+* **Remote / Public Network**:
   ```bash
   export CYBERMCP_HTTP_API_KEY="your-secure-secret-key"
-  vajra-mcp --transport sse --host 127.0.0.1 --port 8394
+  vajra-mcp --transport sse --host 0.0.0.0 --port 8394
   ```
-* **Without Authentication (Localhost only)**:
-  ```bash
-  export CYBERMCP_ALLOW_LOCALHOST_NO_AUTH="true"
-  vajra-mcp --transport sse --host 127.0.0.1 --port 8394
-  ```
+  *(Note: If bound to 0.0.0.0 without a key, Vajra MCP automatically generates a secure ephemeral token displayed in console).*
 
 ---
 
